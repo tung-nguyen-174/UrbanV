@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* Apple HIG - UrbanV System Colors */
+:root {
+  /* Canvas & Glass Surfaces */
+  --apple-canvas-dark: #0B101D;
+  --apple-glass-surface: rgba(255, 255, 255, 0.07);
+  --apple-glass-stroke: rgba(255, 255, 255, 0.12);
+  --apple-glass-blur: blur(30px) saturate(200%);
+
+  /* Typography */
+  --font-display: 'Sora', -apple-system, "SF Pro Display", sans-serif;
+  --font-mono: "SF Mono", monospace;
+
+  /* Planning Overlay Accent Tones */
+  --zone-odt-red: #D16F6D;    /* Urban Residential (ODT) */
+  --zone-tmd-amber: #F4BA43;  /* Commercial & Service (TMD) */
+  --zone-skk-blue: #6D84C8;   /* Industrial Zone (SKK) */
+  --zone-cln-green: #A9D18E;  /* Greenery / Long-term Crops (CLN) */
+  --zone-dgd-cyan: #81BADF;   /* Education (DGD) */
+  --zone-dgt-gray: #A0A0A0;   /* Transportation land (DGT) */
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Sora', -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom maplibre attribution overrides */
+.maplibregl-ctrl-attrib {
+  font-size: 10px !important;
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(4px);
+  border-radius: 6px !important;
+  margin: 4px !important;
+}
+
+.dark .maplibregl-ctrl-attrib {
+  background-color: rgba(15, 23, 42, 0.85) !important;
+  color: #94a3b8 !important;
+}
+
+.dark .maplibregl-ctrl-attrib a {
+  color: #cbd5e1 !important;
+}

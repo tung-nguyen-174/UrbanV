@@ -1,0 +1,32 @@
+[
+  {
+    "id": "tinh-thanh-hoa",
+    "name": "Tỉnh Thanh Hóa",
+    "level": "province",
+    "valid_from": null,
+    "valid_to": null,
+    "predecessors": []
+  },
+  {
+    "id": "phuong-hac-thanh",
+    "name": "Phường Hạc Thành",
+    "level": "commune",
+    "parent_id": "tinh-thanh-hoa",
+    "valid_from": "2025-07-01",
+    "valid_to": null,
+    "predecessors": [
+      "Phường Phú Sơn",
+      "Phường Lam Sơn",
+      "Phường Ba Đình",
+      "Phường Ngọc Trạo",
+      "Phường Đông Sơn",
+      "Phường Trường Thi",
+      "Phường Điện Biên",
+      "Phường Đông Hương",
+      "Phường Đông Hải",
+      "Phường Đông Vệ",
+      "một phần Phường Đông Thọ",
+      "một phần Phường An Hưng"
+    ]
+  }
+]

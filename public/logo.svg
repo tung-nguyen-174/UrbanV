@@ -1,0 +1,33 @@
+<svg width="512" height="512" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="appleCanvasBg" cx="50%" cy="25%" r="80%" fx="50%" fy="15%">
+      <stop offset="0%" stopColor="#1E2A44" />
+      <stop offset="60%" stopColor="#0B101D" />
+      <stop offset="100%" stopColor="#050811" />
+    </radialGradient>
+    <linearGradient id="metalRibbon" x1="20%" y1="20%" x2="80%" y2="85%">
+      <stop offset="0%" stopColor="#FFFFFF" />
+      <stop offset="45%" stopColor="#E2E8F0" />
+      <stop offset="75%" stopColor="#CBD5E1" />
+      <stop offset="100%" stopColor="#94A3B8" />
+    </linearGradient>
+    <linearGradient id="innerGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="rgba(255,255,255,0.25)" />
+      <stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
+    </linearGradient>
+    <filter id="ribbonShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#000000" floodOpacity="0.4" />
+    </filter>
+  </defs>
+
+  <rect x="2" y="2" width="116" height="116" rx="26" fill="url(#appleCanvasBg)" />
+  <rect x="2" y="2" width="116" height="116" rx="26" stroke="rgba(255,255,255,0.14)" stroke-width="1.5" />
+  <rect x="4" y="4" width="112" height="112" rx="24" fill="none" stroke="url(#innerGlow)" stroke-width="1" />
+
+  <g filter="url(#ribbonShadow)">
+    <path d="M 40 32 C 34 32 30 36 30 42 L 48 80 C 53 89 66 89 72 80 L 89 44 C 91 38 87 32 80 32 C 74 32 70 36 68 42 L 56 68 L 44 42 C 42 36 38 32 40 32 Z" fill="none" stroke="url(#metalRibbon)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 38 36 L 56 74 C 59 80 67 80 70 74 L 84 44" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2.5" stroke-linecap="round" />
+    <circle cx="79" cy="42" r="4.5" fill="url(#metalRibbon)" />
+    <circle cx="78" cy="41" r="1.8" fill="#FFFFFF" />
+  </g>
+</svg>

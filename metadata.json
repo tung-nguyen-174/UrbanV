@@ -1,0 +1,6 @@
+{
+  "name": "UrbanV",
+  "description": "Tra cứu thông tin quy hoạch Phường Hạc Thành, Tỉnh Thanh Hóa kèm căn cứ pháp lý chính thức.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
