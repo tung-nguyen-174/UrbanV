@@ -1,6 +1,6 @@
 import * as turf from '@turf/turf';
 import type { Feature, FeatureCollection, Geometry, Point, Polygon, MultiPolygon } from 'geojson';
-import { isPublishable } from '../taxonomy';
+import { isPublishable, mapLabel } from '../taxonomy';
 import type {
   AdminUnit,
   DocumentRecord,
@@ -93,39 +93,29 @@ export function filterVisibleFeatures(
   features: PlanningFeature[],
   preview: boolean
 ): PlanningFeature[] {
-  return features.filter((f) => {
-    if (!f.properties) return false;
-    if (preview) {
-      const s = f.properties.review_status;
-      return s === 'approved' || s === 'reviewed' || s === 'draft';
-    }
-    return isPublishable(f.properties);
-  });
+  return features.filter((f) => isPublishable(f.properties, preview));
 }
 
 /**
- * Creates centroid points from polygon land-use features for clean map labels.
- * Only landuse features with a valid category_code get a label.
+ * Creates centroid points from polygon features for clean map labels.
+ * Only features with a non-empty mapLabel() get a label (unresolved codes get none).
  */
 export function createCentroidLabels(
   features: PlanningFeature[]
-): FeatureCollection<Point, { category_code: string; label: string }> {
-  const labelFeatures: Feature<Point, { category_code: string; label: string }>[] = [];
+): FeatureCollection<Point, { label: string }> {
+  const labelFeatures: Feature<Point, { label: string }>[] = [];
 
   for (const f of features) {
-    if (f.properties?.layer === 'landuse' && f.properties.category_code) {
+    const label = mapLabel(f.properties);
+    if (label) {
       try {
         const geom = f.geometry;
         if (geom.type === 'Polygon' || geom.type === 'MultiPolygon') {
-          // Use turf.pointOnFeature to ensure centroid is inside concave polygons
-          const pt = turf.pointOnFeature(f as Feature<Polygon | MultiPolygon>);
+          const pt = turf.centroid(f as Feature<Polygon | MultiPolygon>);
           labelFeatures.push({
             type: 'Feature',
             geometry: pt.geometry,
-            properties: {
-              category_code: f.properties.category_code,
-              label: f.properties.category_code,
-            },
+            properties: { label },
           });
         }
       } catch {

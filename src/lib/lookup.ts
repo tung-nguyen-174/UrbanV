@@ -147,15 +147,7 @@ export function lookup(
     ? features
     : features?.features ?? [];
 
-  const candidateFeatures = allFeatures.filter((f) => {
-    if (!f.properties) return false;
-    if (previewMode) {
-      // In preview mode: approved, reviewed, draft are allowed
-      const s = f.properties.review_status;
-      return s === 'approved' || s === 'reviewed' || s === 'draft';
-    }
-    return isPublishable(f.properties);
-  });
+  const candidateFeatures = allFeatures.filter((f) => isPublishable(f.properties, previewMode));
 
   // 3. Find matching features that contain the point
   const matches: PlanningFeature[] = [];

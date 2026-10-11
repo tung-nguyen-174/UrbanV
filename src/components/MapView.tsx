@@ -4,11 +4,7 @@ import maplibreglWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { Locate, Plus, Minus, Sun, Moon } from 'lucide-react';
-import {
-  colorMatchExpression,
-  outlineMatchExpression,
-  type LandUseCode,
-} from '../taxonomy';
+import { fillColorExpression, outlineColorExpression } from '../taxonomy';
 import type { PlanningFeature, PlanningFeatureCollection } from '../types';
 import { createCentroidLabels, EMPTY_FEATURE_COLLECTION } from '../lib/data';
 
@@ -106,8 +102,8 @@ export const MapView: React.FC<MapViewProps> = ({
           type: 'fill',
           source: 'features-source',
           paint: {
-            'fill-color': colorMatchExpression() as any,
-            'fill-opacity': 0.25,
+            'fill-color': fillColorExpression() as any,
+            'fill-opacity': 0.4,
           },
         });
 
@@ -117,8 +113,8 @@ export const MapView: React.FC<MapViewProps> = ({
           type: 'line',
           source: 'features-source',
           paint: {
-            'line-color': outlineMatchExpression() as any,
-            'line-width': 2,
+            'line-color': outlineColorExpression() as any,
+            'line-width': 1.2,
             'line-opacity': 0.85,
           },
         });
@@ -162,6 +158,7 @@ export const MapView: React.FC<MapViewProps> = ({
           id: 'centroid-labels-layer',
           type: 'symbol',
           source: 'centroid-labels-source',
+          minzoom: 14.5,
           layout: {
             'text-field': ['get', 'label'],
             'text-size': 12,
@@ -183,6 +180,11 @@ export const MapView: React.FC<MapViewProps> = ({
     },
     [features, ward, getMaskGeoJson, isDarkTheme]
   );
+  // Map event handlers registered once must call the latest setupLayers, not a stale closure
+  const setupLayersRef = useRef(setupLayers);
+  setupLayersRef.current = setupLayers;
+  const hasFitWardRef = useRef(false);
+  const isFirstThemeRunRef = useRef(true);
 
   // Initialize Map
   useEffect(() => {
@@ -210,31 +212,7 @@ export const MapView: React.FC<MapViewProps> = ({
     mapRef.current = map;
 
     map.on('load', () => {
-      setupLayers(map);
-
-      // Fit map to ward bbox if polygon exists
-      try {
-        if (ward && ward.features && ward.features.length > 0) {
-          const hasPolygons = ward.features.some(
-            (f) =>
-              f.geometry &&
-              (f.geometry.type === 'Polygon' ||
-                f.geometry.type === 'MultiPolygon')
-          );
-          if (hasPolygons) {
-            const bbox = turf.bbox(ward);
-            map.fitBounds(
-              [
-                [bbox[0], bbox[1]],
-                [bbox[2], bbox[3]],
-              ],
-              { padding: 48, maxZoom: 16 }
-            );
-          }
-        }
-      } catch (err) {
-        console.warn('Error fitting to ward bbox:', err);
-      }
+      setupLayersRef.current(map);
     });
 
     // Handle user tap/click on map
@@ -248,24 +226,63 @@ export const MapView: React.FC<MapViewProps> = ({
     };
   }, []);
 
-  // Update layers whenever data (ward or features) changes
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    setupLayers(map);
-  }, [features, ward, setupLayers]);
-
-  // Handle Theme Style Switch
+  // Update layers whenever data (ward or features) changes.
+  // isStyleLoaded() stays false until all basemap tiles are in, so retry on 'idle'.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    if (map.isStyleLoaded()) {
+      setupLayers(map);
+      return;
+    }
+    const apply = () => setupLayers(map);
+    map.once('idle', apply);
+    return () => {
+      map.off('idle', apply);
+    };
+  }, [setupLayers]);
+
+  // Fit map to ward bbox once the ward polygon has loaded
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || hasFitWardRef.current) return;
+    try {
+      const hasPolygons = ward?.features?.some(
+        (f) =>
+          f.geometry &&
+          (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
+      );
+      if (hasPolygons) {
+        const bbox = turf.bbox(ward);
+        map.fitBounds(
+          [
+            [bbox[0], bbox[1]],
+            [bbox[2], bbox[3]],
+          ],
+          { padding: 48, maxZoom: 16 }
+        );
+        hasFitWardRef.current = true;
+      }
+    } catch (err) {
+      console.warn('Error fitting to ward bbox:', err);
+    }
+  }, [ward]);
+
+  // Handle Theme Style Switch (skipped on mount: the map is created with the right style)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (isFirstThemeRunRef.current) {
+      isFirstThemeRunRef.current = false;
+      return;
+    }
 
     const targetStyle = isDarkTheme ? DARK_STYLE : LIGHT_STYLE;
     map.setStyle(targetStyle);
 
     // Re-add sources and layers after style finishes loading
     map.once('style.load', () => {
-      setupLayers(map);
+      setupLayersRef.current(map);
     });
 
     // Fallback if dark style fails
@@ -273,7 +290,7 @@ export const MapView: React.FC<MapViewProps> = ({
       if (isDarkTheme) {
         console.warn('Dark style failed, falling back to Positron');
         map.setStyle(LIGHT_STYLE);
-        map.once('style.load', () => setupLayers(map));
+        map.once('style.load', () => setupLayersRef.current(map));
       }
     };
     map.once('error', errorHandler);
@@ -281,7 +298,7 @@ export const MapView: React.FC<MapViewProps> = ({
     return () => {
       map.off('error', errorHandler);
     };
-  }, [isDarkTheme, setupLayers]);
+  }, [isDarkTheme]);
 
   // Sync active coordinate marker
   useEffect(() => {

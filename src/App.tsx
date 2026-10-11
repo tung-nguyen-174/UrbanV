@@ -2,10 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { Bookmark, AlertTriangle, AlertCircle, X, Sparkles, MapPin, Trash2 } from 'lucide-react';
-import {
-  COPY,
-  type LandUseCode,
-} from './taxonomy';
+import { COPY, getGroup, type LegendGroupId } from './taxonomy';
 import type {
   AdminUnit,
   DocumentRecord,
@@ -61,15 +58,14 @@ export default function App() {
     return filterVisibleFeatures(allFeatures, isDraftPreview);
   }, [allFeatures, isDraftPreview]);
 
-  // Distinct land-use codes currently present in loaded features
-  const presentCodes = useMemo(() => {
-    const set = new Set<LandUseCode>();
+  // Legend groups present in loaded features, with polygon count per group
+  const presentGroups = useMemo(() => {
+    const counts = new Map<LegendGroupId, number>();
     for (const f of visibleFeatures) {
-      if (f.properties?.layer === 'landuse' && f.properties.category_code) {
-        set.add(f.properties.category_code as LandUseCode);
-      }
+      const group = getGroup(f.properties?.legend_group);
+      if (group) counts.set(group.id, (counts.get(group.id) ?? 0) + 1);
     }
-    return Array.from(set);
+    return Array.from(counts, ([id, count]) => ({ id, count }));
   }, [visibleFeatures]);
 
   // Ward bounding box for search viewbox constraint
@@ -267,7 +263,7 @@ export default function App() {
 
         {/* Legend Overlay (Collapsible) */}
         <div className="absolute bottom-24 left-3 z-20 pointer-events-auto max-w-[280px]">
-          <Legend presentCodes={presentCodes} />
+          <Legend presentGroups={presentGroups} />
         </div>
 
         {/* Interactive MapView */}

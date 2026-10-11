@@ -18,8 +18,7 @@ import {
 import {
   STATUS,
   COPY,
-  landUseLabel,
-  getLandUse,
+  featureTitleVi,
 } from '../taxonomy';
 import type {
   AdminUnit,
@@ -75,9 +74,8 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
 
   const handleSave = () => {
     const firstMatch = result.matches[0];
-    const catCode = firstMatch?.properties?.category_code;
-    const catInfo = getLandUse(catCode);
-    const label = catInfo ? `${catInfo.code} - ${catInfo.nameVi}` : result.wardName;
+    const catCode = firstMatch?.properties?.category_code ?? undefined;
+    const label = firstMatch ? featureTitleVi(firstMatch.properties) : result.wardName;
 
     const ok = savePlaceLocally({
       id: `${result.lng.toFixed(5)}_${result.lat.toFixed(5)}`,
@@ -112,8 +110,6 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
       : 'h-[88dvh] max-h-[92dvh]';
 
   const primaryMatch: PlanningFeature | undefined = result.matches[0];
-  const primaryCode = primaryMatch?.properties?.category_code;
-  const primaryLandUse = getLandUse(primaryCode);
 
   return (
     <div
@@ -159,14 +155,8 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                 {statusInfo.labelVi}
               </h2>
               <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
-                {primaryCode ? (
-                  <>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {primaryCode}
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span className="truncate">{primaryLandUse?.nameVi}</span>
-                  </>
+                {primaryMatch ? (
+                  <span className="truncate">{featureTitleVi(primaryMatch.properties)}</span>
                 ) : (
                   <span>{result.wardName}</span>
                 )}
@@ -246,13 +236,8 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
               <div className="space-y-1">
                 <span className="text-sm text-slate-400">Phân loại đất</span>
                 <p className="text-base font-semibold text-slate-900 dark:text-white">
-                  {landUseLabel(primaryMatch.properties.category_code)}
+                  {featureTitleVi(primaryMatch.properties)}
                 </p>
-                {primaryLandUse && (
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    {primaryLandUse.plainVi}
-                  </p>
-                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-sm">
@@ -336,7 +321,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                               Mã đối tượng: {props.id}
                             </span>
                             <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
-                              {landUseLabel(props.category_code)}
+                              {featureTitleVi(props)}
                             </h4>
                           </div>
                           {areaHa !== null && (

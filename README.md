@@ -11,7 +11,7 @@ UrbanV là ứng dụng web di động (mobile-first web app) phục vụ thí �
   - Ứng dụng tuân thủ nghiêm ngặt nguyên tắc: **Không bịa đặt số liệu, không sinh dữ liệu mẫu placeholder hoặc "lorem ipsum"**.
   - Mọi polygon và văn bản viện dẫn phải có nguồn gốc pháp lý chính xác (trang văn bản, số hiệu, cơ quan ban hành).
   - Trạng thái chưa có dữ liệu sẽ hiển thị trung thực là `Chưa có dữ liệu` (`nodata`), tuyệt đối không đoán mò.
-- **Phân loại đất**: Định nghĩa duy nhất tại `src/taxonomy.ts` theo Thông tư 08/2024/TT-BTNMT (ODT, ONT, TMD, SKK, DGD, DGT, DKV, CLN, TSC).
+- Land-use codes and legend colour groups are defined only in src/taxonomy.ts (v2).
 - **Bốn trạng thái kết quả (Result States)**:
   1. `fit` (Phù hợp quy hoạch): Vị trí nằm trong vùng quy hoạch đã duyệt, dữ liệu mới và cách xa ranh giới.
   2. `caution` (Cần lưu ý): Có quy hoạch chuyển tiếp hoặc chồng lấn hành lang giao thông.

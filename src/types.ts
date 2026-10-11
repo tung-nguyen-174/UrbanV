@@ -1,15 +1,19 @@
 import type { Feature, FeatureCollection, Geometry, Polygon, MultiPolygon } from 'geojson';
-import type { LandUseCode, ResultStatus, ReviewStatus } from './taxonomy';
+import type { LegendGroupId, ResultStatus, ReviewStatus } from './taxonomy';
 
 export interface PlanningFeatureProperties {
   id: string;
   layer: 'landuse' | 'transport' | 'admin';
-  category_code?: LandUseCode | string;
+  /** null = unresolved: only the colour group (legend_group) is known. */
+  category_code?: string | null;
+  legend_group?: LegendGroupId | string | null;
+  candidate_codes?: string[];
+  code_resolved?: boolean;
   admin_unit_id?: string;
   document_id?: string;
   source_page?: number;
-  effective_date?: string;
-  last_checked?: string;
+  effective_date?: string | null;
+  last_checked?: string | null;
   accuracy_m?: number;
   version_label?: string;
   transitional?: boolean;

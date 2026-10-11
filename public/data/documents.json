@@ -2,13 +2,14 @@
   {
     "id": "qhsdd-2030-tpth",
     "number": "",
-    "title": "Bản đồ Quy hoạch sử dụng đất đến năm 2030, TP. Thanh Hóa, tỷ lệ 1:25.000",
+    "title": "Bản đồ Quy hoạch sử dụng đất đến năm 2030, TP. Thanh Hóa, tỷ lệ 1:25.000 (bản in 10/09/2021)",
     "authority": "",
     "signed_date": "",
     "effective_date": "",
     "official_url": "",
-    "scope": "ward-level land use (pre-merger, city level)",
-    "republish_permission": "unknown"
+    "scope": "land use, pre-merger city level",
+    "republish_permission": "unknown",
+    "status_note": "Bản in chưa có ngày ký, chưa rõ số quyết định phê duyệt"
   },
   {
     "id": "nq-36-hdnd-2026",
@@ -19,6 +20,17 @@
     "effective_date": "",
     "official_url": "",
     "scope": "provincial strategy (not ward-level land use)",
+    "republish_permission": "unknown"
+  },
+  {
+    "id": "nq-1686-ubtvqh15",
+    "number": "1686/NQ-UBTVQH15",
+    "title": "Nghị quyết về việc sắp xếp các đơn vị hành chính cấp xã của tỉnh Thanh Hóa năm 2025",
+    "authority": "Ủy ban Thường vụ Quốc hội",
+    "signed_date": "2025-06-16",
+    "effective_date": "",
+    "official_url": "",
+    "scope": "administrative reorganisation (cited in the preamble of NQ 36/NQ-HĐND; effective date to be confirmed)",
     "republish_permission": "unknown"
   }
 ]

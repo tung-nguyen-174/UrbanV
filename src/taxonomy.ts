@@ -1,174 +1,215 @@
 /**
- * src/taxonomy.ts
- * Single source of truth for land-use codes, result states and thresholds.
- * Legend, filter chips, popups, labels and Gemini prompts must import from here.
- * Never hardcode codes, names or colours anywhere else. See SPEC.md.
+ * src/taxonomy.ts  (v2, approved legend + colour groups for the 2030 Thanh Hoa map)
  *
- * Codes follow Thông tư 08/2024/TT-BTNMT. Codes marked verify:true
- * must be re-checked against the circular before public launch.
+ * Single source of truth for land-use codes, legend colour groups, result states,
+ * thresholds and fixed copy. Legend, chips, popups, labels and map colours must
+ * import from here. Never hardcode codes, names or colours anywhere else. See SPEC.md.
+ *
+ * IMPORTANT: on the source map, many codes share ONE fill colour. The map layer is
+ * therefore coloured by `legend_group` (the colour group), not by `category_code`.
+ * A feature with category_code === null is "unresolved": we know its colour group
+ * but not its exact code. It must show the group's `unresolvedTextVi`.
  */
 
 // ---------------------------------------------------------------------------
-// Land-use classes
+// Land-use codes
 // ---------------------------------------------------------------------------
 
-export const LAND_USE_CODES = [
-  'ODT',
-  'ONT',
-  'TMD',
-  'SKK',
-  'DGD',
-  'DGT',
-  'DKV',
-  'CLN',
-  'TSC',
-] as const;
-
-export type LandUseCode = (typeof LAND_USE_CODES)[number];
-
-/** Fill patterns so colour is never the only signal (colour-blind safe). */
-export type PatternId =
-  | 'solid'
-  | 'diagonal'
-  | 'dots'
-  | 'cross'
-  | 'horizontal'
-  | 'vertical'
-  | 'grid'
-  | 'waves'
-  | 'diamond';
+export type CodeSource = 'legend' | 'map-only';
 
 export interface LandUseClass {
-  code: LandUseCode;
-  /** Full Vietnamese name. Always shown together with the code. */
+  code: string;
   nameVi: string;
-  /** Short plain-language description for the user card. */
-  plainVi: string;
-  /** Fill / legend colour. A hint only: the code is the legal standard. */
-  color: string;
-  /** Darker colour for outlines and text on light backgrounds. */
-  outline: string;
-  pattern: PatternId;
-  /** Short symbol shown next to the code in the legend. */
-  glyph: string;
-  /** True = double-check this code against the circular before launch. */
+  /** Colour group this code is drawn in on the source map. */
+  group: LegendGroupId | null;
+  /** 'legend' = listed in the map legend. 'map-only' = appears on the map, not in legend. */
+  source: CodeSource;
+  /** True = meaning must be confirmed against the circular used for the map. */
   verify?: boolean;
 }
 
-export const LAND_USE: Record<LandUseCode, LandUseClass> = {
-  ODT: {
-    code: 'ODT',
-    nameVi: 'Đất ở tại đô thị',
-    plainVi: 'Đất để ở trong khu vực đô thị.',
-    color: '#D16F6D',
-    outline: '#A64846',
-    pattern: 'solid',
-    glyph: '⌂',
-  },
-  ONT: {
-    code: 'ONT',
-    nameVi: 'Đất ở tại nông thôn',
-    plainVi: 'Đất để ở trong khu vực nông thôn.',
-    color: '#FF8A80',
-    outline: '#A8332B',
-    pattern: 'dots',
-    glyph: '⌂',
-  },
-  TMD: {
-    code: 'TMD',
-    nameVi: 'Đất thương mại, dịch vụ',
-    plainVi: 'Đất dành cho kinh doanh, cửa hàng, dịch vụ.',
-    color: '#F4BA43',
-    outline: '#BA841C',
-    pattern: 'diagonal',
-    glyph: '₫',
-  },
-  SKK: {
-    code: 'SKK',
-    nameVi: 'Đất khu công nghiệp',
-    plainVi: 'Đất dành cho khu công nghiệp.',
-    color: '#6D84C8',
-    outline: '#455C9C',
-    pattern: 'cross',
-    glyph: '⚙',
-  },
-  DGD: {
-    code: 'DGD',
-    nameVi: 'Đất cơ sở giáo dục và đào tạo',
-    plainVi: 'Đất dành cho trường học, cơ sở đào tạo.',
-    color: '#81BADF',
-    outline: '#4F87A8',
-    pattern: 'horizontal',
-    glyph: '✎',
-  },
-  DGT: {
-    code: 'DGT',
-    nameVi: 'Đất giao thông',
-    plainVi: 'Đất dành cho đường và công trình giao thông.',
-    color: '#A0A0A0',
-    outline: '#6B6B6B',
-    pattern: 'vertical',
-    glyph: '⇄',
-  },
-  DKV: {
-    code: 'DKV',
-    nameVi: 'Đất khu vui chơi, giải trí công cộng (công viên)',
-    plainVi: 'Công viên, quảng trường, khu vui chơi công cộng.',
-    color: '#30D158',
-    outline: '#1B7F37',
-    pattern: 'waves',
-    glyph: '❀',
-  },
-  CLN: {
-    code: 'CLN',
-    nameVi: 'Đất trồng cây lâu năm',
-    plainVi: 'Đất trồng cây lâu năm (không phải công viên).',
-    color: '#A9D18E',
-    outline: '#6F9A52',
-    pattern: 'grid',
-    glyph: '❦',
-  },
-  TSC: {
-    code: 'TSC',
-    nameVi: 'Đất xây dựng trụ sở cơ quan',
-    plainVi: 'Đất dành cho trụ sở cơ quan nhà nước.',
-    color: '#007AFF',
-    outline: '#0040A0',
-    pattern: 'diamond',
-    glyph: '▣',
-    verify: true,
-  },
-};
+export type LegendGroupId =
+  | 'ODT'
+  | 'SALMON'
+  | 'LUC_LUA'
+  | 'HNK'
+  | 'CLN'
+  | 'AQUA_NTS_MNC'
+  | 'RPH'
+  | 'RDD'
+  | 'RSX'
+  | 'CQP_CAN'
+  | 'SKS_DRA'
+  | 'NTD';
 
-/** Safe lookup. Unknown or missing codes never crash the UI or get guessed. */
+const L = (code: string, nameVi: string, group: LegendGroupId | null): LandUseClass =>
+  ({ code, nameVi, group, source: 'legend' });
+const M = (code: string, nameVi: string, group: LegendGroupId | null): LandUseClass =>
+  ({ code, nameVi, group, source: 'map-only', verify: true });
+
+export const LAND_USE_LIST: readonly LandUseClass[] = [
+  // --- in the map legend ---
+  L('LUA', 'Đất trồng lúa', 'LUC_LUA'),
+  L('LUC', 'Đất chuyên trồng lúa nước', 'LUC_LUA'),
+  L('HNK', 'Đất trồng cây hằng năm khác', 'HNK'),
+  L('CLN', 'Đất trồng cây lâu năm', 'CLN'),
+  L('NTS', 'Đất nuôi trồng thủy sản', 'AQUA_NTS_MNC'),
+  L('RPH', 'Đất rừng phòng hộ', 'RPH'),
+  L('RDD', 'Đất rừng đặc dụng', 'RDD'),
+  L('RSX', 'Đất rừng sản xuất', 'RSX'),
+  L('CQP', 'Đất quốc phòng', 'CQP_CAN'),
+  L('CAN', 'Đất an ninh', 'CQP_CAN'),
+  L('SKK', 'Đất khu công nghiệp', 'SALMON'),
+  L('SKN', 'Đất cụm công nghiệp', 'SALMON'),
+  L('SKC', 'Đất cơ sở sản xuất kinh doanh', 'SALMON'),
+  L('SKS', 'Đất sử dụng cho hoạt động khoáng sản', 'SKS_DRA'),
+  L('TMD', 'Đất thương mại, dịch vụ', 'SALMON'),
+  L('DHT', 'Đất phát triển hạ tầng', 'SALMON'),
+  L('DDT', 'Đất di tích danh thắng', 'SALMON'),
+  L('DDL', 'Đất danh lam thắng cảnh', 'SALMON'),
+  L('DRA', 'Đất bãi thải, xử lý chất thải', 'SKS_DRA'),
+  L('ODT', 'Đất ở tại đô thị', 'ODT'),
+  L('TSC', 'Đất trụ sở cơ quan', 'SALMON'),
+  L('DTS', 'Đất công trình sự nghiệp', 'SALMON'),
+  L('TON', 'Đất cơ sở tôn giáo', 'SALMON'),
+  L('NTD', 'Đất nghĩa trang, nghĩa địa', 'NTD'),
+  L('PNK', 'Đất phi nông nghiệp còn lại', 'SALMON'),
+  L('DYT', 'Đất cơ sở y tế', 'SALMON'),
+  L('DGD', 'Đất cơ sở giáo dục và đào tạo', 'SALMON'),
+  L('DTT', 'Đất cơ sở thể dục, thể thao', 'SALMON'),
+  L('CSD', 'Đất chưa sử dụng', null),
+  // --- seen on the map, not in the legend: meaning to be confirmed ---
+  M('DKV', 'Đất khu vui chơi, giải trí công cộng (công viên)', 'SALMON'),
+  M('DVH', 'Đất cơ sở văn hóa', 'SALMON'),
+  M('DCH', 'Đất chợ', 'SALMON'),
+  M('DXH', 'Đất cơ sở dịch vụ xã hội', 'SALMON'),
+  M('DBV', 'Đất công trình bưu chính, viễn thông', 'SALMON'),
+  M('NKH', 'Đất nông nghiệp khác', null),
+  M('MNC', 'Đất mặt nước chuyên dùng', 'AQUA_NTS_MNC'),
+  M('SON', 'Đất sông, ngòi, kênh, rạch, suối', 'AQUA_NTS_MNC'),
+  M('DGT', 'Đất giao thông', null),
+  M('ONT', 'Đất ở tại nông thôn', 'ODT'),
+];
+
+export const LAND_USE: Record<string, LandUseClass> = Object.fromEntries(
+  LAND_USE_LIST.map((c) => [c.code, c]),
+);
+export const LAND_USE_CODES: readonly string[] = LAND_USE_LIST.map((c) => c.code);
+
 export function getLandUse(code: string | null | undefined): LandUseClass | null {
   if (!code) return null;
-  return (LAND_USE as Record<string, LandUseClass>)[code] ?? null;
+  return LAND_USE[code] ?? null;
 }
-
-export function isLandUseCode(code: unknown): code is LandUseCode {
-  return typeof code === 'string' && (LAND_USE_CODES as readonly string[]).includes(code);
+export function isLandUseCode(code: unknown): code is string {
+  return typeof code === 'string' && code in LAND_USE;
 }
-
-/** Label like "ODT · Đất ở tại đô thị". Always show code with the full name. */
+/** "ODT · Đất ở tại đô thị". Always show code with the full name. */
 export function landUseLabel(code: string | null | undefined): string {
   const c = getLandUse(code);
   return c ? `${c.code} · ${c.nameVi}` : 'Chưa xác định loại đất';
 }
 
-/** MapLibre match expressions built from the taxonomy (no hardcoded colours in map code). */
-export function colorMatchExpression(): unknown[] {
-  const expr: unknown[] = ['match', ['get', 'category_code']];
-  for (const code of LAND_USE_CODES) expr.push(code, LAND_USE[code].color);
-  expr.push('#C7C7CC'); // fallback for unknown codes
-  return expr;
+// ---------------------------------------------------------------------------
+// Legend colour groups (these are what the map is coloured by)
+// Fill colours are the exact colours printed on the source map's legend.
+// ---------------------------------------------------------------------------
+
+export type PatternId = 'solid' | 'diagonal' | 'dots' | 'cross' | 'horizontal' | 'vertical' | 'grid' | 'waves' | 'diamond';
+
+export interface LegendGroup {
+  id: LegendGroupId;
+  /** Short name for the legend panel. */
+  nameVi: string;
+  /** Fill colour = colour printed on the source map (legend swatch). */
+  color: string;
+  /** Darker outline derived for readability. */
+  outline: string;
+  pattern: PatternId;
+  glyph: string;
+  /** If true, the group maps to a single code, so features can be resolved without reading labels. */
+  singleCode: string | null;
+  /** Text for the result card when category_code is null. */
+  unresolvedTextVi: string;
 }
 
-export function outlineMatchExpression(): unknown[] {
-  const expr: unknown[] = ['match', ['get', 'category_code']];
-  for (const code of LAND_USE_CODES) expr.push(code, LAND_USE[code].outline);
-  expr.push('#636366');
-  return expr;
+function darken(hex: string, f = 0.55): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * f);
+  const g = Math.round(((n >> 8) & 255) * f);
+  const b = Math.round((n & 255) * f);
+  return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+const G = (
+  id: LegendGroupId, nameVi: string, color: string, pattern: PatternId, glyph: string,
+  singleCode: string | null, unresolvedTextVi: string,
+): LegendGroup => ({ id, nameVi, color, outline: darken(color), pattern, glyph, singleCode, unresolvedTextVi });
+
+export const LEGEND_GROUPS: Record<LegendGroupId, LegendGroup> = {
+  ODT: G('ODT', 'Đất ở đô thị (ODT)', '#FFA0FF', 'solid', '⌂', 'ODT', 'Đất ở tại đô thị (ODT)'),
+  SALMON: G('SALMON', 'Đất phi nông nghiệp khác', '#FFAAA0', 'diagonal', '▣', null,
+    'Đất phi nông nghiệp khác, chưa phân loại chi tiết'),
+  LUC_LUA: G('LUC_LUA', 'Đất trồng lúa (LUA/LUC)', '#FFFF64', 'dots', '❋', null,
+    'Đất trồng lúa, chưa phân loại chi tiết'),
+  HNK: G('HNK', 'Đất trồng cây hằng năm khác (HNK)', '#FFF0B4', 'horizontal', '❦', 'HNK',
+    'Đất trồng cây hằng năm khác (HNK)'),
+  CLN: G('CLN', 'Đất trồng cây lâu năm (CLN)', '#FFD7AA', 'grid', '❦', 'CLN',
+    'Đất trồng cây lâu năm (CLN)'),
+  AQUA_NTS_MNC: G('AQUA_NTS_MNC', 'Mặt nước / nuôi trồng thủy sản', '#AAFFFF', 'waves', '≈', null,
+    'Mặt nước hoặc đất nuôi trồng thủy sản, chưa phân loại chi tiết'),
+  RPH: G('RPH', 'Đất rừng phòng hộ (RPH)', '#BEFF1E', 'vertical', '♣', 'RPH', 'Đất rừng phòng hộ (RPH)'),
+  RDD: G('RDD', 'Đất rừng đặc dụng (RDD)', '#6EFF64', 'cross', '♣', 'RDD', 'Đất rừng đặc dụng (RDD)'),
+  RSX: G('RSX', 'Đất rừng sản xuất (RSX)', '#B4FFB4', 'diamond', '♣', 'RSX', 'Đất rừng sản xuất (RSX)'),
+  CQP_CAN: G('CQP_CAN', 'Đất quốc phòng / an ninh', '#FF505A', 'cross', '★', null,
+    'Đất quốc phòng hoặc an ninh, chưa phân loại chi tiết'),
+  SKS_DRA: G('SKS_DRA', 'Đất khoáng sản / bãi thải', '#CDAACD', 'diamond', '◆', null,
+    'Đất khoáng sản hoặc bãi thải, chưa phân loại chi tiết'),
+  NTD: G('NTD', 'Đất nghĩa trang (NTD)', '#D2D2D2', 'vertical', '✝', 'NTD', 'Đất nghĩa trang, nghĩa địa (NTD)'),
+};
+export const LEGEND_GROUP_IDS = Object.keys(LEGEND_GROUPS) as LegendGroupId[];
+
+export function getGroup(id: string | null | undefined): LegendGroup | null {
+  if (!id) return null;
+  return (LEGEND_GROUPS as Record<string, LegendGroup>)[id] ?? null;
+}
+
+/** Minimal shape of a feature's properties that taxonomy helpers need. */
+export interface PlanProps {
+  category_code?: string | null;
+  legend_group?: string | null;
+  review_status?: string;
+  last_checked?: string | null;
+  accuracy_m?: number | null;
+}
+
+/** True if the exact code is known (not just the colour group). */
+export function isResolved(p: PlanProps | null | undefined): boolean {
+  return !!p && isLandUseCode(p.category_code);
+}
+
+/** Text for the result card. Unresolved features show the group's fixed text. */
+export function featureTitleVi(p: PlanProps | null | undefined): string {
+  if (!p) return 'Chưa xác định loại đất';
+  if (isResolved(p)) return landUseLabel(p.category_code);
+  return getGroup(p.legend_group)?.unresolvedTextVi ?? 'Chưa xác định loại đất';
+}
+
+/** Short on-map label: the code if resolved, otherwise none (legend explains the colour). */
+export function mapLabel(p: PlanProps | null | undefined): string {
+  return isResolved(p) ? (p!.category_code as string) : '';
+}
+
+/** MapLibre expressions: colour by legend_group, never by category_code. */
+export function fillColorExpression(): unknown[] {
+  const e: unknown[] = ['match', ['get', 'legend_group']];
+  for (const id of LEGEND_GROUP_IDS) e.push(id, LEGEND_GROUPS[id].color);
+  e.push('#C7C7CC');
+  return e;
+}
+export function outlineColorExpression(): unknown[] {
+  const e: unknown[] = ['match', ['get', 'legend_group']];
+  for (const id of LEGEND_GROUP_IDS) e.push(id, LEGEND_GROUPS[id].outline);
+  e.push('#636366');
+  return e;
 }
 
 // ---------------------------------------------------------------------------
@@ -178,109 +219,98 @@ export function outlineMatchExpression(): unknown[] {
 export type ResultStatus = 'fit' | 'caution' | 'uncertain' | 'nodata';
 
 export interface StatusInfo {
-  id: ResultStatus;
-  icon: string;
-  labelVi: string;
-  /** Default one-line answer. Components may add specifics (zone, distance). */
-  sentenceVi: string;
-  color: string;
-  outline: string;
+  id: ResultStatus; icon: string; labelVi: string; sentenceVi: string; color: string; outline: string;
 }
-
 export const STATUS: Record<ResultStatus, StatusInfo> = {
-  fit: {
-    id: 'fit',
-    icon: '✓',
-    labelVi: 'Phù hợp quy hoạch',
-    sentenceVi: 'Vị trí này nằm trong vùng quy hoạch theo dữ liệu đã được duyệt.',
-    color: '#34C759',
-    outline: '#1B7F37',
-  },
-  caution: {
-    id: 'caution',
-    icon: '!',
-    labelVi: 'Cần lưu ý',
-    sentenceVi: 'Có đường quy hoạch, hành lang hoặc phiên bản dự thảo có thể ảnh hưởng đến vị trí này.',
-    color: '#FFCC00',
-    outline: '#8A6D00',
-  },
-  uncertain: {
-    id: 'uncertain',
-    icon: '?',
-    labelVi: 'Không chắc chắn, cần xác minh',
-    sentenceVi: 'Vị trí gần ranh giới hoặc dữ liệu đã cũ. Hãy xác minh với cơ quan có thẩm quyền.',
-    color: '#FF9500',
-    outline: '#8A4B00',
-  },
-  nodata: {
-    id: 'nodata',
-    icon: '–',
-    labelVi: 'Chưa có dữ liệu',
-    sentenceVi: 'Chưa có dữ liệu quy hoạch cho vị trí này.',
-    color: '#8E8E93',
-    outline: '#48484A',
-  },
+  fit: { id: 'fit', icon: '✓', labelVi: 'Phù hợp quy hoạch',
+    sentenceVi: 'Vị trí này nằm trong vùng quy hoạch theo dữ liệu đã được duyệt.', color: '#34C759', outline: '#1B7F37' },
+  caution: { id: 'caution', icon: '!', labelVi: 'Cần lưu ý',
+    sentenceVi: 'Có đường quy hoạch, hành lang hoặc phiên bản dự thảo có thể ảnh hưởng đến vị trí này.', color: '#FFCC00', outline: '#8A6D00' },
+  uncertain: { id: 'uncertain', icon: '?', labelVi: 'Không chắc chắn, cần xác minh',
+    sentenceVi: 'Dữ liệu chưa đủ để kết luận chắc chắn cho vị trí này. Hãy xác minh với cơ quan có thẩm quyền.', color: '#FF9500', outline: '#8A4B00' },
+  nodata: { id: 'nodata', icon: '–', labelVi: 'Chưa có dữ liệu',
+    sentenceVi: 'Chưa có dữ liệu quy hoạch cho vị trí này.', color: '#8E8E93', outline: '#48484A' },
 };
 
 // ---------------------------------------------------------------------------
-// Thresholds. ASSUMPTIONS: tune after measuring real error at the pilot.
+// Thresholds (assumptions: tune after measuring real error at the pilot)
 // ---------------------------------------------------------------------------
 
-export const THRESHOLDS = {
-  /** Closer than this to a feature boundary (metres) => "uncertain". */
-  BOUNDARY_UNCERTAIN_M: 30,
-  /** Data older than this (months) => "uncertain". */
-  STALE_MONTHS: 12,
-} as const;
+export const THRESHOLDS = { BOUNDARY_UNCERTAIN_M: 30, STALE_MONTHS: 12 } as const;
 
-/** True if last_checked (YYYY-MM-DD) is older than the freshness threshold. */
 export function isStale(lastChecked: string | null | undefined, now: Date = new Date()): boolean {
-  if (!lastChecked) return true; // unknown freshness is treated as stale
+  if (!lastChecked) return true;
   const d = new Date(lastChecked);
   if (Number.isNaN(d.getTime())) return true;
   const cutoff = new Date(now);
   cutoff.setMonth(cutoff.getMonth() - THRESHOLDS.STALE_MONTHS);
   return d < cutoff;
 }
-
-/**
- * Effective "too close to boundary" distance for a feature:
- * the larger of the global threshold and the feature's own measured accuracy.
- */
 export function boundaryThresholdM(accuracyM?: number | null): number {
   const a = typeof accuracyM === 'number' && accuracyM > 0 ? accuracyM : 0;
   return Math.max(THRESHOLDS.BOUNDARY_UNCERTAIN_M, a);
 }
 
 // ---------------------------------------------------------------------------
-// Review gate and fixed copy
+// Review gate and "can this feature ever be 'fit'?" rules
 // ---------------------------------------------------------------------------
 
 export type ReviewStatus = 'draft' | 'reviewed' | 'approved';
 
-/** Only approved features are ever rendered or used for lookup. */
-export function isPublishable(props: { review_status?: string } | null | undefined): boolean {
-  return props?.review_status === 'approved';
+/** Only approved features are used, except in preview mode (see SPEC.md rule 6). */
+export function isPublishable(p: { review_status?: string } | null | undefined, previewDraft = false): boolean {
+  if (!p) return false;
+  if (p.review_status === 'approved') return true;
+  return previewDraft && (p.review_status === 'draft' || p.review_status === 'reviewed');
 }
 
+/** A document is "verified" only when its number and effective date are both filled in. */
+export function isDocumentVerified(doc: { number?: string; effective_date?: string } | null | undefined): boolean {
+  return !!doc && !!doc.number && !!doc.effective_date;
+}
+
+/**
+ * Highest status a match is allowed to produce:
+ *  - not approved                    -> 'uncertain'
+ *  - unresolved code (colour only)   -> 'uncertain'
+ *  - document not verified           -> 'uncertain'
+ *  - otherwise                       -> 'fit'
+ * `transitional` does NOT lower the status; it adds a note (COPY.transitionalVi).
+ */
+export function maxStatusFor(
+  p: PlanProps,
+  doc: { number?: string; effective_date?: string } | null | undefined,
+): { max: ResultStatus; reasons: string[] } {
+  const reasons: string[] = [];
+  if (p.review_status !== 'approved') reasons.push(COPY.notApprovedVi);
+  if (!isResolved(p)) reasons.push(COPY.unresolvedReasonVi);
+  if (!isDocumentVerified(doc)) reasons.push(COPY.docUnverifiedVi);
+  return { max: reasons.length ? 'uncertain' : 'fit', reasons };
+}
+
+// ---------------------------------------------------------------------------
+// Fixed copy
+// ---------------------------------------------------------------------------
+
 export const COPY = {
-  disclaimerVi:
-    'Kết quả chỉ mang tính tham khảo. Giá trị pháp lý thuộc văn bản của cơ quan có thẩm quyền.',
+  disclaimerVi: 'Kết quả chỉ mang tính tham khảo. Giá trị pháp lý thuộc văn bản của cơ quan có thẩm quyền.',
   pilotBadgeVi: 'Thí điểm · Phường Hạc Thành · dữ liệu đang được số hóa',
   draftBannerVi: 'BẢN NHÁP, chưa được duyệt',
   outOfPilotVi: 'Ngoài phạm vi thí điểm (hiện chỉ có Phường Hạc Thành).',
   noPlanInWardVi: 'Vị trí nằm trong Phường Hạc Thành nhưng chưa có dữ liệu quy hoạch đã duyệt cho điểm này.',
   osmAttributionVi: '© OpenStreetMap contributors',
   transitionalVi: 'Quy hoạch chuyển tiếp (lập trước 01/07/2025)',
+  notApprovedVi: 'Dữ liệu đang là bản nháp, chưa được duyệt',
+  unresolvedReasonVi: 'Chưa phân loại chi tiết (mới biết nhóm màu trên bản đồ)',
+  docUnverifiedVi: 'Chưa xác nhận số và ngày hiệu lực của văn bản phê duyệt bản đồ này',
+  mapSourceNoteVi: 'Nguồn: bản đồ quy hoạch sử dụng đất đến 2030, bản in 10/09/2021, chưa rõ số quyết định phê duyệt',
   reportButtonVi: 'Báo dữ liệu chưa đúng',
   viewSourceVi: 'Xem văn bản gốc',
+  noOfficialLinkVi: 'Chưa có liên kết chính thức',
   lastUpdatedVi: 'Cập nhật lần cuối',
   effectiveFromVi: 'Có hiệu lực từ',
+  unknownVi: 'Chưa có',
 } as const;
 
-// ---------------------------------------------------------------------------
-// Gemini helper (offline use in AI Studio): enum for the response schema
-// ---------------------------------------------------------------------------
-
-/** Paste into the Gemini response schema as the `enum` for category_code. */
+/** Paste into the Gemini response schema as the `enum` for category_code (offline use). */
 export const GEMINI_CATEGORY_ENUM: readonly string[] = [...LAND_USE_CODES, 'UNKNOWN'];
