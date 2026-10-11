@@ -63,7 +63,17 @@ export const MapView: React.FC<MapViewProps> = ({
   // Set up or update layers & sources
   const setupLayers = useCallback(
     (map: maplibregl.Map) => {
-      // 1. Ward Mask (Dimming outside ward)
+      // Plan layers go under the basemap's roads and labels, so no polygon hides a street name.
+      // Looked up from the current style every time, because light, dark and fallback styles differ.
+      const styleLayers = map.getStyle()?.layers ?? [];
+      const firstRoad = styleLayers.find(
+        (l) => l.type === 'line' && /road|highway|street|transport|bridge|tunnel/i.test(l.id)
+      );
+      const firstSymbol = styleLayers.find((l) => l.type === 'symbol');
+      const planBeforeId = firstRoad?.id ?? firstSymbol?.id;
+
+      // 1. Ward Mask (Dimming outside ward). Added first and never placed under the plan layers.
+      // Note: no beforeId, so it sits above the basemap roads too (dims roads outside the ward).
       const maskData = getMaskGeoJson();
       if (!map.getSource('ward-mask-source')) {
         map.addSource('ward-mask-source', {
@@ -97,28 +107,48 @@ export const MapView: React.FC<MapViewProps> = ({
           data: visibleFeaturesCollection as any,
         });
 
-        // Polygon fill
-        map.addLayer({
-          id: 'features-fill',
-          type: 'fill',
-          source: 'features-source',
-          paint: {
-            'fill-color': fillColorExpression() as any,
-            'fill-opacity': 0.4,
+        // Polygon fill: lighter below zoom 13, where blocks are small
+        map.addLayer(
+          {
+            id: 'features-fill',
+            type: 'fill',
+            source: 'features-source',
+            paint: {
+              'fill-color': fillColorExpression() as any,
+              'fill-opacity': ['step', ['zoom'], 0.5, 13, 0.35] as any,
+            },
           },
-        });
+          planBeforeId
+        );
 
-        // Polygon outline
-        map.addLayer({
-          id: 'features-outline',
-          type: 'line',
-          source: 'features-source',
-          paint: {
-            'line-color': outlineColorExpression() as any,
-            'line-width': 1.2,
-            'line-opacity': 0.85,
+        // White halo under the outline, so the edge reads on any fill colour
+        map.addLayer(
+          {
+            id: 'features-outline-halo',
+            type: 'line',
+            source: 'features-source',
+            paint: {
+              'line-color': '#FFFFFF',
+              'line-width': 2.5,
+              'line-opacity': 0.9,
+            },
           },
-        });
+          planBeforeId
+        );
+
+        // Thin outline in the legend group colour
+        map.addLayer(
+          {
+            id: 'features-outline',
+            type: 'line',
+            source: 'features-source',
+            paint: {
+              'line-color': outlineColorExpression() as any,
+              'line-width': 1,
+            },
+          },
+          planBeforeId
+        );
       } else {
         (map.getSource('features-source') as maplibregl.GeoJSONSource).setData(
           visibleFeaturesCollection as any
@@ -131,15 +161,25 @@ export const MapView: React.FC<MapViewProps> = ({
           type: 'geojson',
           data: ward as any,
         });
+        // Ward outline: solid dark blue with a white halo; always above the plan layers
+        map.addLayer({
+          id: 'ward-outline-halo',
+          type: 'line',
+          source: 'ward-source',
+          paint: {
+            'line-color': '#FFFFFF',
+            'line-width': 5,
+            'line-opacity': 0.9,
+          },
+        });
         map.addLayer({
           id: 'ward-outline-line',
           type: 'line',
           source: 'ward-source',
           paint: {
             'line-color': '#1E3A8A',
-            'line-width': 3,
-            'line-dasharray': [3, 1.5],
-            'line-opacity': 0.9,
+            'line-width': 2.5,
+            'line-opacity': 0.95,
           },
         });
       } else {
@@ -170,7 +210,7 @@ export const MapView: React.FC<MapViewProps> = ({
           paint: {
             'text-color': isDarkTheme ? '#F8FAFC' : '#0F172A',
             'text-halo-color': isDarkTheme ? '#020617' : '#FFFFFF',
-            'text-halo-width': 2,
+            'text-halo-width': 1.5,
           },
         });
       } else {
