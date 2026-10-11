@@ -5,7 +5,7 @@ import maplibreglWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { Locate, Plus, Minus, Sun, Moon } from 'lucide-react';
-import { fillColorExpression, outlineColorExpression } from '../taxonomy';
+import { featureTitleVi, fillColorExpression, outlineColorExpression } from '../taxonomy';
 import type { PlanningFeature, PlanningFeatureCollection } from '../types';
 import { createCentroidLabels, EMPTY_FEATURE_COLLECTION } from '../lib/data';
 
@@ -17,7 +17,11 @@ if (typeof window !== 'undefined') {
 interface MapViewProps {
   ward: FeatureCollection<Geometry, { [key: string]: unknown }>;
   features: PlanningFeature[];
+  /** Features matched by the last lookup, drawn as a highlight. */
+  selectedFeatures: PlanningFeature[];
   activeCoordinate: [number, number] | null;
+  /** Height in px of the bottom result sheet; the map keeps content above it. */
+  bottomPadding: number;
   onSelectLocation: (lng: number, lat: number) => void;
   isDarkTheme: boolean;
   onToggleTheme: () => void;
@@ -29,7 +33,9 @@ const DARK_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 export const MapView: React.FC<MapViewProps> = ({
   ward,
   features,
+  selectedFeatures,
   activeCoordinate,
+  bottomPadding,
   onSelectLocation,
   isDarkTheme,
   onToggleTheme,
@@ -39,6 +45,8 @@ export const MapView: React.FC<MapViewProps> = ({
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  // Desktop hover tooltip (pointer: fine only)
+  const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null);
 
   // Helper to compute mask
   const getMaskGeoJson = useCallback(() => {
@@ -155,6 +163,61 @@ export const MapView: React.FC<MapViewProps> = ({
         );
       }
 
+      // 2b. Selection highlight: all features matched by the last lookup
+      const hasSelection = selectedFeatures.length > 0;
+      const selectionCollection: PlanningFeatureCollection = {
+        type: 'FeatureCollection',
+        features: selectedFeatures,
+      };
+      if (!map.getSource('selection-source')) {
+        map.addSource('selection-source', {
+          type: 'geojson',
+          data: selectionCollection as any,
+        });
+        map.addLayer(
+          {
+            id: 'selection-fill',
+            type: 'fill',
+            source: 'selection-source',
+            paint: {
+              'fill-color': fillColorExpression() as any,
+              'fill-opacity': 0.65,
+            },
+          },
+          planBeforeId
+        );
+        map.addLayer(
+          {
+            id: 'selection-halo',
+            type: 'line',
+            source: 'selection-source',
+            paint: { 'line-color': '#FFFFFF', 'line-width': 7 },
+          },
+          planBeforeId
+        );
+        map.addLayer(
+          {
+            id: 'selection-line',
+            type: 'line',
+            source: 'selection-source',
+            paint: { 'line-color': '#191E3C', 'line-width': 4 },
+          },
+          planBeforeId
+        );
+      } else {
+        (map.getSource('selection-source') as maplibregl.GeoJSONSource).setData(
+          selectionCollection as any
+        );
+      }
+      // While something is selected, the plain plan fill steps back so the selection stands out
+      if (map.getLayer('features-fill')) {
+        map.setPaintProperty(
+          'features-fill',
+          'fill-opacity',
+          hasSelection ? 0.2 : (['step', ['zoom'], 0.5, 13, 0.35] as any)
+        );
+      }
+
       // 3. Ward Boundary Outline
       if (!map.getSource('ward-source')) {
         map.addSource('ward-source', {
@@ -219,7 +282,7 @@ export const MapView: React.FC<MapViewProps> = ({
         ).setData(centroidData as any);
       }
     },
-    [features, ward, getMaskGeoJson, isDarkTheme]
+    [features, selectedFeatures, ward, getMaskGeoJson, isDarkTheme]
   );
   // Map event handlers registered once must call the latest setupLayers, not a stale closure
   const setupLayersRef = useRef(setupLayers);
@@ -260,6 +323,25 @@ export const MapView: React.FC<MapViewProps> = ({
     map.on('click', (e) => {
       onSelectLocation(e.lngLat.lng, e.lngLat.lat);
     });
+
+    // Desktop only: pointer cursor and a small title tooltip over plan polygons.
+    // Touch devices get no hover behaviour.
+    if (window.matchMedia('(pointer: fine)').matches) {
+      map.on('mousemove', (e) => {
+        if (!map.getLayer('features-fill')) return;
+        const hits = map.queryRenderedFeatures(e.point, { layers: ['features-fill'] });
+        map.getCanvas().style.cursor = hits.length ? 'pointer' : '';
+        setHover(
+          hits.length
+            ? { x: e.point.x, y: e.point.y, text: featureTitleVi(hits[0].properties as any) }
+            : null
+        );
+      });
+      map.on('mouseout', () => {
+        map.getCanvas().style.cursor = '';
+        setHover(null);
+      });
+    }
 
     return () => {
       map.remove();
@@ -362,7 +444,7 @@ export const MapView: React.FC<MapViewProps> = ({
       el.className = 'marker-pin-wrap flex items-center justify-center';
       el.innerHTML = `
         <div class="relative flex items-center justify-center w-8 h-8">
-          <div class="absolute w-8 h-8 rounded-full bg-rose-500/25 animate-ping"></div>
+          <div class="absolute w-8 h-8 rounded-full bg-rose-500/25 motion-safe:animate-ping"></div>
           <div class="w-4 h-4 rounded-full bg-rose-600 border-2 border-white shadow-md"></div>
         </div>
       `;
@@ -375,6 +457,55 @@ export const MapView: React.FC<MapViewProps> = ({
       markerRef.current.setLngLat([lng, lat]);
     }
   }, [activeCoordinate]);
+
+  // Keep the tapped point and its matched block above the bottom sheet.
+  // With a selection: fit to the selected blocks and the tapped point (zoom at most 17).
+  // With only a tap: centre on the tapped point. Otherwise: just apply the padding.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    // Top inset clears the search card and pilot badge, which sit over the map's top edge
+    const topInset = window.innerWidth < 640 ? 170 : 130;
+    const viewPadding = { top: topInset, left: 0, right: 0, bottom: bottomPadding };
+
+    const apply = () => {
+      if (selectedFeatures.length > 0) {
+        const parts: any[] = [...selectedFeatures];
+        if (activeCoordinate) parts.push(turf.point(activeCoordinate));
+        const bbox = turf.bbox(turf.featureCollection(parts as any));
+        const camera = map.cameraForBounds(
+          [
+            [bbox[0], bbox[1]],
+            [bbox[2], bbox[3]],
+          ],
+          { padding: { top: topInset + 16, left: 32, right: 32, bottom: bottomPadding + 32 } }
+        );
+        if (camera) {
+          map.easeTo({
+            center: camera.center,
+            zoom: Math.min(camera.zoom ?? map.getZoom(), 17),
+            padding: viewPadding,
+            duration: 300,
+          });
+          return;
+        }
+      }
+      if (activeCoordinate) {
+        map.easeTo({ center: activeCoordinate, padding: viewPadding, duration: 300 });
+        return;
+      }
+      map.easeTo({ padding: viewPadding, duration: 300 });
+    };
+
+    if (map.isStyleLoaded()) {
+      apply();
+      return;
+    }
+    map.once('idle', apply);
+    return () => {
+      map.off('idle', apply);
+    };
+  }, [bottomPadding, selectedFeatures, activeCoordinate]);
 
   // Zoom handlers
   const handleZoomIn = () => {
@@ -478,6 +609,17 @@ export const MapView: React.FC<MapViewProps> = ({
           <span className="text-sm font-medium whitespace-nowrap">Chế độ tối</span>
         </button>
       </nav>
+
+      {/* Desktop hover tooltip: the plan block's title */}
+      {hover && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute z-30 px-2.5 py-1 rounded-md bg-slate-900/90 text-white text-sm shadow-lg max-w-[260px]"
+          style={{ left: hover.x + 14, top: hover.y + 14 }}
+        >
+          {hover.text}
+        </div>
+      )}
 
       {/* Geolocation feedback notification */}
       {geoError && (

@@ -27,6 +27,9 @@ import { ResultSheet } from './components/ResultSheet';
 import { ReportDialog } from './components/ReportDialog';
 import { UrbanVLogo } from './components/UrbanVLogo';
 
+// Stable empty selection, so the map does not re-run its effects on every render
+const NO_SELECTION: PlanningFeature[] = [];
+
 // maplibre-gl (about 1 MB) is loaded only when the map is shown, so the search and header paint first
 const MapView = React.lazy(() =>
   import('./components/MapView').then((m) => ({ default: m.MapView }))
@@ -66,6 +69,10 @@ export default function App() {
   // Active query & result state
   const [activeCoordinate, setActiveCoordinate] = useState<[number, number] | null>(null);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
+  // Height of the result sheet, so the map keeps the tapped block above it
+  const [sheetHeight, setSheetHeight] = useState<number>(0);
+  // A new lookup replaces the result, so the highlight is replaced with it; no result = no highlight
+  const selectedFeatures = lookupResult?.matches ?? NO_SELECTION;
 
   // Dialogs
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
@@ -319,7 +326,9 @@ export default function App() {
             <MapView
               ward={ward}
               features={visibleFeatures}
+              selectedFeatures={selectedFeatures}
               activeCoordinate={activeCoordinate}
+              bottomPadding={sheetHeight}
               onSelectLocation={handleMapSelect}
               isDarkTheme={isDarkTheme}
               onToggleTheme={toggleTheme}
@@ -335,6 +344,7 @@ export default function App() {
         adminUnits={adminUnits}
         onOpenReport={() => setIsReportOpen(true)}
         onClose={() => setLookupResult(null)}
+        onHeightChange={setSheetHeight}
       />
 
       {/* 6. REPORT DIALOG */}
