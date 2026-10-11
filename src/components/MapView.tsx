@@ -204,7 +204,7 @@ export const MapView: React.FC<MapViewProps> = ({
     // Custom attribution control (position bottom-right)
     map.addControl(
       new maplibregl.AttributionControl({
-        compact: true,
+        compact: false,
         customAttribution: '© OpenStreetMap contributors · OpenFreeMap',
       }),
       'bottom-right'
@@ -392,7 +392,7 @@ export const MapView: React.FC<MapViewProps> = ({
       <div ref={mapContainerRef} className="w-full h-full" />
 
       {/* Floating Map Controls (Right Side) */}
-      <nav aria-label="Điều khiển bản đồ" className="absolute top-20 right-3 z-20 flex flex-col gap-2">
+      <nav aria-label="Điều khiển bản đồ" className="absolute top-60 right-3 z-20 flex flex-col gap-2">
         {/* Zoom Controls */}
         <div className="flex flex-col bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 overflow-hidden">
           <button
