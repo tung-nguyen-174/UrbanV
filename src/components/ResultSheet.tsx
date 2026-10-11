@@ -262,6 +262,11 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                 className="text-base font-semibold text-slate-900 dark:text-white truncate outline-none"
               >
                 {statusInfo.labelVi}
+                {result.matches.some((m) => m.properties.review_status !== 'approved') && (
+                  <span className="ml-2 align-middle shrink-0 inline-block rounded-md px-1.5 py-0.5 text-sm font-medium bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200">
+                    Bản nháp
+                  </span>
+                )}
               </h2>
               <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
                 {primaryMatch ? (

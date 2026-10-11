@@ -29,6 +29,17 @@ const PATTERN_IDS: PatternId[] = [
 ];
 const patternLayerId = (id: LegendGroupId) => `features-pattern-${id}`;
 
+/**
+ * Outline style by review status (SPEC rule 6): solid for approved, dashed for draft and
+ * reviewed. One data-driven expression, so the line still comes from a single layer.
+ */
+const REVIEW_DASH = [
+  'case',
+  ['==', ['get', 'review_status'], 'approved'],
+  ['literal', [1, 0]],
+  ['literal', [2, 1.5]],
+] as any;
+
 /** Draws one small repeating tile for a legend pattern (used with map.addImage). */
 function drawPatternTile(pattern: PatternId): ImageData {
   const size = 24;
@@ -118,6 +129,8 @@ interface MapViewProps {
   showPatterns: boolean;
   /** Preview mode also shows draft features. */
   previewDraft: boolean;
+  /** Reviewer view: outlines only (takes effect in preview mode). */
+  outlineOnly: boolean;
   /** Features matched by the last lookup, drawn as a highlight. */
   selectedFeatures: PlanningFeature[];
   activeCoordinate: [number, number] | null;
@@ -141,6 +154,7 @@ export const MapView: React.FC<MapViewProps> = ({
   fillOpacity,
   showPatterns,
   previewDraft,
+  outlineOnly,
   onSelectLocation,
   isDarkTheme,
   onToggleTheme,
@@ -175,12 +189,13 @@ export const MapView: React.FC<MapViewProps> = ({
 
   // Live layer controls: group filter, fill opacity, pattern layers. Read through a ref so
   // map handlers and setupLayers always see the current values.
-  const controlsRef = useRef({ activeGroups, fillOpacity, showPatterns, previewDraft, hasSelection: false });
+  const controlsRef = useRef({ activeGroups, fillOpacity, showPatterns, previewDraft, outlineOnly, hasSelection: false });
   controlsRef.current = {
     activeGroups,
     fillOpacity,
     showPatterns,
     previewDraft,
+    outlineOnly: previewDraft && outlineOnly,
     hasSelection: selectedFeatures.length > 0,
   };
 
@@ -210,9 +225,16 @@ export const MapView: React.FC<MapViewProps> = ({
       const layerId = patternLayerId(id);
       if (!map.getLayer(layerId)) continue;
       map.setFilter(layerId, ['all', ['==', ['get', 'legend_group'], id], publishable, groupOn] as any);
-      const on = c.showPatterns && c.activeGroups.includes(id);
+      const on = c.showPatterns && c.activeGroups.includes(id) && !c.outlineOnly;
       map.setLayoutProperty(layerId, 'visibility', on ? 'visible' : 'none');
     }
+
+    // Reviewer view ("Chỉ viền", preview only): fills and halos off, outlines at full opacity
+    const fillsVisible = c.outlineOnly ? 'none' : 'visible';
+    for (const id of ['features-fill', 'features-outline-halo', 'selection-fill', 'selection-halo']) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', fillsVisible);
+    }
+    if (map.getLayer('features-outline')) map.setPaintProperty('features-outline', 'line-opacity', 1);
   }, []);
 
   // Set up or update layers & sources
@@ -286,6 +308,7 @@ export const MapView: React.FC<MapViewProps> = ({
               'line-color': '#FFFFFF',
               'line-width': 2.5,
               'line-opacity': 0.9,
+              'line-dasharray': REVIEW_DASH,
             },
           },
           planBeforeId
@@ -300,6 +323,7 @@ export const MapView: React.FC<MapViewProps> = ({
             paint: {
               'line-color': outlineColorExpression() as any,
               'line-width': 1,
+              'line-dasharray': REVIEW_DASH,
             },
           },
           planBeforeId
@@ -624,7 +648,7 @@ export const MapView: React.FC<MapViewProps> = ({
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     applyLayerControls(map);
-  }, [activeGroups, fillOpacity, showPatterns, previewDraft, selectedFeatures, applyLayerControls]);
+  }, [activeGroups, fillOpacity, showPatterns, previewDraft, outlineOnly, selectedFeatures, applyLayerControls]);
 
   // Keep the tapped point and its matched block above the bottom sheet.
   // With a selection: fit to the selected blocks and the tapped point (zoom at most 17).

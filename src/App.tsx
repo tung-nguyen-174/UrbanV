@@ -117,6 +117,8 @@ export default function App() {
   }, []);
   const [fillOpacity, setFillOpacity] = useState<number>(0.35);
   const [showPatterns, setShowPatterns] = useState<boolean>(false);
+  // Reviewer view: outlines only. Held in memory only, so it resets on reload.
+  const [outlineOnly, setOutlineOnly] = useState<boolean>(false);
 
   // Ward bounding box for search viewbox constraint
   const wardBbox = useMemo<[number, number, number, number] | null>(() => {
@@ -342,7 +344,22 @@ export default function App() {
         </div>
 
         {/* Layer controls (collapsible) above the bottom sheet's peek height */}
-        <aside aria-label="Hiển thị bản đồ" className="absolute bottom-24 left-3 z-20 pointer-events-auto">
+        <aside aria-label="Hiển thị bản đồ" className="absolute bottom-24 left-3 z-20 pointer-events-auto flex flex-col items-start gap-2">
+          {/* Reviewer view (preview only): compare edges with the source document. Not persisted. */}
+          {isDraftPreview && (
+            <button
+              type="button"
+              aria-pressed={outlineOnly}
+              onClick={() => setOutlineOnly((v) => !v)}
+              className={`min-h-[48px] px-4 rounded-2xl border shadow-xl text-sm font-medium cursor-pointer ${
+                outlineOnly
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white/95 text-slate-800 border-slate-200/90'
+              }`}
+            >
+              Chỉ viền
+            </button>
+          )}
           <LayerControls
             fillOpacity={fillOpacity}
             onOpacityChange={(v) => setFillOpacity(Math.min(0.8, Math.max(0.1, v)))}
@@ -370,6 +387,7 @@ export default function App() {
               fillOpacity={fillOpacity}
               showPatterns={showPatterns}
               previewDraft={isDraftPreview}
+              outlineOnly={outlineOnly}
               onSelectLocation={handleMapSelect}
               isDarkTheme={isDarkTheme}
               onToggleTheme={toggleTheme}
