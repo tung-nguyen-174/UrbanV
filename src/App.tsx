@@ -1,7 +1,7 @@
 import React, { Suspense, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
-import { Bookmark, AlertTriangle, AlertCircle, X, Sparkles, MapPin, Trash2 } from 'lucide-react';
+import { Bookmark, AlertTriangle, AlertCircle, X, MapPin, Trash2 } from 'lucide-react';
 import { COPY, getGroup, LEGEND_GROUP_IDS, type LegendGroupId } from './taxonomy';
 import type {
   AdminUnit,

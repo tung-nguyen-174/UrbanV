@@ -87,7 +87,6 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
   documents,
   adminUnits,
   onOpenReport,
-  onClose,
   onHeightChange,
 }) => {
   const [snap, setSnap] = useState<SnapState>('half');

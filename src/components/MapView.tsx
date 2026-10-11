@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import maplibreglWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { Locate, Plus, Minus, Sun, Moon } from 'lucide-react';
@@ -335,7 +334,6 @@ export const MapView: React.FC<MapViewProps> = ({
       }
 
       // 2b. Selection highlight: all features matched by the last lookup
-      const hasSelection = selectedFeatures.length > 0;
       const selectionCollection: PlanningFeatureCollection = {
         type: 'FeatureCollection',
         features: selectedFeatures,
