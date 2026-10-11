@@ -18,19 +18,20 @@ export const Legend: React.FC<LegendProps> = ({ presentGroups }) => {
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-3 py-2.5 flex items-center justify-between gap-2 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+        aria-expanded={isExpanded}
+        className="w-full min-h-[48px] px-3 py-2.5 flex items-center justify-between gap-2 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
       >
         <div className="flex items-center gap-2 font-medium">
           <Layers className="w-4 h-4 text-slate-600 dark:text-slate-400" />
           <span>Chú giải loại đất quy hoạch</span>
           {groupsToShow.length > 0 && (
-            <span className="text-[11px] text-slate-400">({groupsToShow.length})</span>
+            <span className="text-[11px] text-slate-600">({groupsToShow.length})</span>
           )}
         </div>
         {isExpanded ? (
-          <ChevronUp className="w-4 h-4 text-slate-400" />
+          <ChevronUp className="w-4 h-4 text-slate-600" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400" />
+          <ChevronDown className="w-4 h-4 text-slate-600" />
         )}
       </button>
 
@@ -79,7 +80,7 @@ export const Legend: React.FC<LegendProps> = ({ presentGroups }) => {
           {/* Colour groups can cover several codes (SPEC rule 11) */}
           {groupsToShow.length > 0 && (
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-start gap-1.5 text-sm text-slate-600 dark:text-slate-400">
-              <Info className="w-4 h-4 shrink-0 mt-0.5 text-slate-400" />
+              <Info className="w-4 h-4 shrink-0 mt-0.5 text-slate-600" />
               <span>Một số nhóm màu gồm nhiều mã đất; chưa phân loại chi tiết.</span>
             </div>
           )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Share2,
   Bookmark,
@@ -89,6 +89,22 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
 }) => {
   const [snap, setSnap] = useState<SnapState>('half');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+
+  // Move focus to the sheet title whenever a new result opens
+  useEffect(() => {
+    if (result) titleRef.current?.focus();
+  }, [result]);
+
+  // Escape collapses the sheet
+  useEffect(() => {
+    if (!result) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && snap !== 'collapsed') setSnap('collapsed');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [result, snap]);
 
   if (!result) return null;
 
@@ -165,9 +181,15 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
   const predecessors = hacThanhAdmin?.predecessors ?? [];
 
   return (
-    <div
-      className={`fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-[#0B101D]/95 backdrop-blur-2xl border-t border-slate-200/90 dark:border-white/12 rounded-t-3xl shadow-2xl transition-all duration-300 ease-out flex flex-col ${heightClass}`}
+    <section
+      aria-label="Kết quả tra cứu"
+      className={`fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-[#0B101D]/95 backdrop-blur-2xl border-t border-slate-200/90 dark:border-white/12 rounded-t-3xl shadow-2xl transition-all duration-300 ease-out flex flex-col pb-[env(safe-area-inset-bottom)] motion-reduce:transition-none ${heightClass}`}
     >
+      {/* Polite live region: announces the result when it changes */}
+      <div aria-live="polite" className="sr-only">
+        {`${statusInfo.labelVi}. ${plainSentence}`}
+      </div>
+
       {/* Toast alert */}
       {toastMessage && (
         <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-slate-900/90 dark:bg-slate-100/90 text-white dark:text-slate-900 text-xs font-medium rounded-full shadow-lg backdrop-blur-xs flex items-center gap-2">
@@ -177,34 +199,44 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
       )}
 
       {/* Header & Drag/Snap controller */}
-      <div
-        className="w-full shrink-0 pt-2 pb-1.5 px-4 cursor-pointer select-none"
-        onClick={() => {
-          if (snap === 'collapsed') setSnap('half');
-          else if (snap === 'half') setSnap('full');
-          else setSnap('half');
-        }}
-      >
-        {/* Grab bar */}
-        <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto" />
+      <div className="w-full shrink-0 pt-1 pb-1.5 px-4 select-none">
+        {/* Handle: a real button, so keyboard and screen-reader users can change the size */}
+        <button
+          type="button"
+          aria-expanded={snap !== 'collapsed'}
+          aria-label="Thay đổi kích thước khung kết quả"
+          onClick={() => {
+            if (snap === 'collapsed') setSnap('half');
+            else if (snap === 'half') setSnap('full');
+            else setSnap('half');
+          }}
+          className="w-full min-h-[48px] flex items-center justify-center cursor-pointer"
+        >
+          <span aria-hidden="true" className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full" />
+        </button>
 
         {/* Collapsed top row summary */}
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-3 min-w-0">
-            {/* Status indicator badge (No pill box, intentional status circle) */}
+            {/* Status indicator badge (icon + text label; colour is never the only signal) */}
             <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-white font-bold text-base shadow-xs"
+              aria-hidden="true"
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold text-base shadow-xs"
               style={{
                 backgroundColor: statusInfo.color,
                 border: `1.5px solid ${statusInfo.outline}`,
-                color: statusInfo.id === 'caution' ? '#000000' : '#FFFFFF',
+                color: '#0B101D',
               }}
             >
               <span>{statusInfo.icon}</span>
             </div>
 
             <div className="min-w-0">
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white truncate">
+              <h2
+                ref={titleRef}
+                tabIndex={-1}
+                className="text-base font-semibold text-slate-900 dark:text-white truncate outline-none"
+              >
                 {statusInfo.labelVi}
               </h2>
               <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
@@ -232,7 +264,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                   e.stopPropagation();
                   setSnap('half');
                 }}
-                className="w-11 h-11 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="w-12 h-12 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                 aria-label="Mở rộng chi tiết"
               >
                 <ChevronUp className="w-5 h-5" />
@@ -245,7 +277,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                     e.stopPropagation();
                     setSnap('full');
                   }}
-                  className="w-11 h-11 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="w-12 h-12 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                   aria-label="Xem toàn màn hình"
                 >
                   <Maximize2 className="w-4 h-4" />
@@ -256,7 +288,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                     e.stopPropagation();
                     setSnap('collapsed');
                   }}
-                  className="w-11 h-11 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="w-12 h-12 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                   aria-label="Thu nhỏ"
                 >
                   <ChevronDown className="w-5 h-5" />
@@ -269,7 +301,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                   e.stopPropagation();
                   setSnap('half');
                 }}
-                className="w-11 h-11 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="w-12 h-12 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                 aria-label="Thu nhỏ về nửa màn hình"
               >
                 <Minimize2 className="w-4 h-4" />
@@ -281,7 +313,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
 
       {/* Scrollable Content (visible in half and full), in card order */}
       {snap !== 'collapsed' && (
-        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-5">
+        <div tabIndex={0} aria-label="Chi tiết kết quả" className="flex-1 overflow-y-auto px-5 py-3 space-y-5">
           {/* 1. One plain sentence (Body text: 16px) */}
           <p className="text-base text-slate-800 dark:text-slate-100 leading-relaxed font-medium">
             {plainSentence}
@@ -290,7 +322,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
           {/* 2. Land-use label */}
           {primaryMatch && (
             <div className="space-y-1">
-              <span className="text-sm text-slate-400">Phân loại đất</span>
+              <span className="text-sm text-slate-600">Phân loại đất</span>
               {result.matches.map((m, idx) => (
                 <MatchTitle
                   key={m.properties.id || idx}
@@ -304,7 +336,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
           {/* 3. Reasons */}
           {result.reasons && result.reasons.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-600">
                 Căn cứ đánh giá trạng thái
               </h3>
               <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
@@ -324,7 +356,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
           {primaryProps && (
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-sm">
               <div>
-                <span className="text-slate-400 flex items-center gap-1">
+                <span className="text-slate-600 flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
                   {COPY.effectiveFromVi}
                 </span>
@@ -333,7 +365,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 flex items-center gap-1">
+                <span className="text-slate-600 flex items-center gap-1">
                   <Clock className="w-4 h-4" />
                   {COPY.lastUpdatedVi}
                 </span>
@@ -384,7 +416,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                   <button
                     type="button"
                     disabled
-                    className="inline-flex items-center gap-1.5 text-slate-400 font-medium text-sm min-h-[36px] cursor-not-allowed"
+                    className="inline-flex items-center gap-1.5 text-slate-600 font-medium text-sm min-h-[36px] cursor-not-allowed"
                   >
                     <span>{COPY.viewSourceVi}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -461,7 +493,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className="text-[11px] font-mono text-slate-400 block">
+                            <span className="text-[11px] font-mono text-slate-600 block">
                               Mã đối tượng: {props.id}
                             </span>
                             <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
@@ -478,7 +510,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                           </div>
                           {areaHa !== null && (
                             <div className="text-right shrink-0">
-                              <span className="text-[11px] text-slate-400 block">Diện tích tính toán</span>
+                              <span className="text-[11px] text-slate-600 block">Diện tích tính toán</span>
                               <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 tabular-nums">
                                 {areaHa} ha
                               </span>
@@ -521,7 +553,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </a>
                             ) : (
-                              <span className="text-slate-400 italic text-[11px]">
+                              <span className="text-slate-600 italic text-[11px]">
                                 {COPY.noOfficialLinkVi}
                               </span>
                             )}
@@ -566,6 +598,6 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 };

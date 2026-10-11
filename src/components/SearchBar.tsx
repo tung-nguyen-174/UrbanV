@@ -153,7 +153,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         aria-busy={isLoading}
         className="flex items-center gap-1.5 sm:gap-2 bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 p-1 sm:p-1.5 transition-all focus-within:ring-2 focus-within:ring-teal-500/50"
       >
-        <div className="pl-2 sm:pl-3 text-slate-400 dark:text-slate-500 shrink-0">
+        <div className="pl-2 sm:pl-3 text-slate-600 dark:text-slate-500 shrink-0">
           <MapPin className="w-5 h-5 text-teal-600 dark:text-teal-400" />
         </div>
 
@@ -168,7 +168,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           }}
           placeholder="Tìm đường hoặc địa điểm trong Phường Hạc Thành"
           aria-label="Tìm đường hoặc địa điểm"
-          className="w-full min-w-0 flex-1 bg-transparent text-[13px] sm:text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none px-1.5 sm:px-2 py-2"
+          className="w-full min-w-0 flex-1 bg-transparent text-[13px] sm:text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-500 focus:outline-none px-1.5 sm:px-2 py-2"
         />
 
         {query && (
@@ -180,7 +180,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               setChoices(null);
             }}
             aria-label="Xóa nội dung tìm kiếm"
-            className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+            className="w-12 h-12 shrink-0 flex items-center justify-center rounded-xl text-slate-600 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -190,7 +190,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           type="submit"
           disabled={isLoading || !query.trim() || disabled}
           aria-label="Tìm kiếm vị trí"
-          className="h-10 sm:h-11 px-3 sm:px-4 shrink-0 flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white font-medium text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+          className="h-12 px-3 sm:px-4 shrink-0 flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white font-medium text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs"
         >
           {isLoading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -240,7 +240,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             type="button"
             onClick={() => setSearchError(null)}
             aria-label="Đóng thông báo"
-            className="ml-2 font-bold hover:underline"
+            className="ml-2 min-h-[48px] min-w-[48px] font-bold hover:underline"
           >
             ✕
           </button>

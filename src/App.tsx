@@ -204,6 +204,7 @@ export default function App() {
       {/* 1. TOP HEADER BAR */}
       <header className="shrink-0 z-30 bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl border-b border-slate-200/90 dark:border-white/10 px-4 py-2.5 flex items-center justify-between">
         {/* Zone 1: Brand title & logo */}
+        <h1 className="sr-only">UrbanV: tra cứu quy hoạch Phường Hạc Thành</h1>
         <UrbanVLogo variant="primary" size="md" showSubtitle={true} />
 
         {/* Zone 3: Actions (A+ toggle, Saved places) */}
@@ -213,8 +214,9 @@ export default function App() {
             type="button"
             onClick={toggleLargeText}
             title={isLargeText ? 'Cỡ chữ bình thường' : 'Phóng to chữ (+25%)'}
-            aria-label="Đổi cỡ chữ"
-            className={`min-h-[44px] px-3 flex items-center justify-center rounded-xl font-semibold text-xs transition-colors cursor-pointer ${
+            aria-label={isLargeText ? 'A+ Cỡ chữ bình thường' : 'A+ Phóng to chữ (+25%)'}
+            aria-pressed={isLargeText}
+            className={`min-h-[48px] min-w-[48px] px-3 flex items-center justify-center rounded-xl font-semibold text-sm transition-colors cursor-pointer ${
               isLargeText
                 ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -229,7 +231,7 @@ export default function App() {
             onClick={handleOpenSavedPlaces}
             title="Địa điểm đã lưu"
             aria-label="Địa điểm đã lưu"
-            className="min-h-[44px] px-3 flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-xs font-medium cursor-pointer"
+            className="min-h-[48px] min-w-[48px] px-3 flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm font-medium cursor-pointer"
           >
             <Bookmark className="w-4 h-4" />
             <span className="hidden xs:inline">Đã lưu</span>
@@ -239,10 +241,10 @@ export default function App() {
 
       {/* 2. DRAFT BANNER (If ?preview=draft) */}
       {isDraftPreview && (
-        <div className="shrink-0 bg-red-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm z-30">
+        <aside aria-label="Cảnh báo bản nháp" className="shrink-0 bg-red-600 text-white px-4 py-2 text-sm font-semibold flex items-center justify-center gap-2 shadow-sm z-30">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{COPY.draftBannerVi}</span>
-        </div>
+        </aside>
       )}
 
       {/* 3. DATA LOAD ERROR (lookups stay disabled until a reload succeeds) */}
@@ -284,9 +286,9 @@ export default function App() {
         </div>
 
         {/* Legend Overlay (Collapsible) */}
-        <div className="absolute bottom-24 left-3 z-20 pointer-events-auto max-w-[280px]">
+        <aside aria-label="Chú giải bản đồ" className="absolute bottom-24 left-3 z-20 pointer-events-auto max-w-[280px]">
           <Legend presentGroups={presentGroups} />
-        </div>
+        </aside>
 
         {/* Interactive MapView */}
         <MapView
@@ -333,7 +335,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsSavedPlacesOpen(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -341,7 +343,7 @@ export default function App() {
 
             <div className="p-4 overflow-y-auto space-y-2 flex-1">
               {savedPlaces.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-sm">
+                <div className="py-8 text-center text-slate-600 text-sm">
                   Chưa có vị trí nào được lưu trên thiết bị này.
                 </div>
               ) : (
@@ -366,7 +368,7 @@ export default function App() {
                       type="button"
                       onClick={(e) => handleDeleteSavedPlace(p.id, e)}
                       aria-label="Xóa địa điểm đã lưu"
-                      className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-rose-600 rounded-xl hover:bg-white dark:hover:bg-slate-700 transition-colors"
+                      className="w-9 h-9 flex items-center justify-center text-slate-600 hover:text-rose-600 rounded-xl hover:bg-white dark:hover:bg-slate-700 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

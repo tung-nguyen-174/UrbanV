@@ -391,14 +391,14 @@ export const MapView: React.FC<MapViewProps> = ({
       <div ref={mapContainerRef} className="w-full h-full" />
 
       {/* Floating Map Controls (Right Side) */}
-      <div className="absolute top-20 right-3 z-20 flex flex-col gap-2">
+      <nav aria-label="Điều khiển bản đồ" className="absolute top-20 right-3 z-20 flex flex-col gap-2">
         {/* Zoom Controls */}
         <div className="flex flex-col bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 overflow-hidden">
           <button
             type="button"
             onClick={handleZoomIn}
             aria-label="Phóng to"
-            className="w-11 h-11 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 border-b border-slate-100 dark:border-white/10 transition-colors cursor-pointer"
+            className="w-12 h-12 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 border-b border-slate-100 dark:border-white/10 transition-colors cursor-pointer"
           >
             <Plus className="w-5 h-5" />
           </button>
@@ -406,7 +406,7 @@ export const MapView: React.FC<MapViewProps> = ({
             type="button"
             onClick={handleZoomOut}
             aria-label="Thu nhỏ"
-            className="w-11 h-11 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            className="w-12 h-12 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
           >
             <Minus className="w-5 h-5" />
           </button>
@@ -418,7 +418,7 @@ export const MapView: React.FC<MapViewProps> = ({
           onClick={handleLocateMe}
           disabled={isLocating}
           aria-label="Vị trí của tôi"
-          className="w-11 h-11 flex items-center justify-center bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50"
+          className="w-12 h-12 flex items-center justify-center bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50"
         >
           <Locate
             className={`w-5 h-5 ${isLocating ? 'animate-spin text-teal-500' : ''}`}
@@ -430,16 +430,17 @@ export const MapView: React.FC<MapViewProps> = ({
           type="button"
           onClick={onToggleTheme}
           aria-label="Chế độ tối"
-          className="h-11 px-3 flex items-center justify-center gap-1.5 bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+          aria-pressed={isDarkTheme}
+          className="h-12 px-3 flex items-center justify-center gap-1.5 bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
         >
           {isDarkTheme ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           <span className="text-sm font-medium whitespace-nowrap">Chế độ tối</span>
         </button>
-      </div>
+      </nav>
 
       {/* Geolocation feedback notification */}
       {geoError && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 bg-rose-900/90 text-white text-xs rounded-full shadow-lg backdrop-blur-xs">
+        <div role="status" className="absolute top-24 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 bg-rose-900/90 text-white text-sm rounded-full shadow-lg backdrop-blur-xs">
           {geoError}
         </div>
       )}
