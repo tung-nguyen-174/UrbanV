@@ -89,7 +89,12 @@ if (wardPolys.length === 0) fail(`${rel(wardPath)} has no Polygon/MultiPolygon f
 const wardLines = wardPolys.flatMap((f) => {
   const l = turf.polygonToLine(f);
   const label = `${rel(wardPath)} feature #${wardFc.features.indexOf(f)}${f.properties?.id ? ` ("${f.properties.id}")` : ''}`;
-  return (l.type === 'FeatureCollection' ? l.features : [l]).map((line) => ({ line, label }));
+  // polygonToLine gives a MultiLineString when the ward has holes: split into single rings
+  const parts = l.type === 'FeatureCollection' ? l.features : [l];
+  return parts.flatMap((part) => {
+    const rings = part.geometry.type === 'LineString' ? [part.geometry.coordinates] : part.geometry.coordinates;
+    return rings.map((coords) => ({ line: turf.lineString(coords), label }));
+  });
 });
 
 const documents = readJson(documentsPath);

@@ -32,7 +32,7 @@ html, body, #root {
 
 /* Custom maplibre attribution overrides */
 .maplibregl-ctrl-attrib {
-  font-size: 10px !important;
+  font-size: 12px !important;
   background-color: rgba(255, 255, 255, 0.85) !important;
   backdrop-filter: blur(4px);
   border-radius: 6px !important;

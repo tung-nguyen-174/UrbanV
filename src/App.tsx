@@ -1,8 +1,8 @@
 import React, { Suspense, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
-import { Bookmark, AlertTriangle, AlertCircle, X, Sparkles, MapPin, Trash2 } from 'lucide-react';
-import { COPY, getGroup, type LegendGroupId } from './taxonomy';
+import { Bookmark, AlertTriangle, AlertCircle, X, MapPin, Trash2 } from 'lucide-react';
+import { COPY, getGroup, LEGEND_GROUP_IDS, type LegendGroupId } from './taxonomy';
 import type {
   AdminUnit,
   DocumentRecord,
@@ -22,10 +22,13 @@ import {
 } from './lib/data';
 import { lookup } from './lib/lookup';
 import { SearchBar } from './components/SearchBar';
-import { Legend } from './components/Legend';
+import { LayerControls, LegendChips, type LegendItem } from './components/Legend';
 import { ResultSheet } from './components/ResultSheet';
 import { ReportDialog } from './components/ReportDialog';
 import { UrbanVLogo } from './components/UrbanVLogo';
+
+// Stable empty selection, so the map does not re-run its effects on every render
+const NO_SELECTION: PlanningFeature[] = [];
 
 // maplibre-gl (about 1 MB) is loaded only when the map is shown, so the search and header paint first
 const MapView = React.lazy(() =>
@@ -66,6 +69,10 @@ export default function App() {
   // Active query & result state
   const [activeCoordinate, setActiveCoordinate] = useState<[number, number] | null>(null);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
+  // Height of the result sheet, so the map keeps the tapped block above it
+  const [sheetHeight, setSheetHeight] = useState<number>(0);
+  // A new lookup replaces the result, so the highlight is replaced with it; no result = no highlight
+  const selectedFeatures = lookupResult?.matches ?? NO_SELECTION;
 
   // Dialogs
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
@@ -77,15 +84,41 @@ export default function App() {
     return filterVisibleFeatures(allFeatures, isDraftPreview);
   }, [allFeatures, isDraftPreview]);
 
-  // Legend groups present in loaded features, with polygon count per group
-  const presentGroups = useMemo(() => {
-    const counts = new Map<LegendGroupId, number>();
+  // Legend: groups present in loaded features, each with its share of the ward's area.
+  // The ward area is the sum of its polygons; overlapping plan polygons are counted twice.
+  const wardAreaM2 = useMemo(() => {
+    let total = 0;
+    for (const f of ward.features ?? []) {
+      if (f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon') total += turf.area(f as any);
+    }
+    return total;
+  }, [ward]);
+  const legendItems = useMemo<LegendItem[]>(() => {
+    const areas = new Map<LegendGroupId, number>();
     for (const f of visibleFeatures) {
       const group = getGroup(f.properties?.legend_group);
-      if (group) counts.set(group.id, (counts.get(group.id) ?? 0) + 1);
+      if (!group) continue;
+      areas.set(group.id, (areas.get(group.id) ?? 0) + turf.area(f as any));
     }
-    return Array.from(counts, ([id, count]) => ({ id, count }));
-  }, [visibleFeatures]);
+    return LEGEND_GROUP_IDS.filter((id) => areas.has(id)).map((id) => ({
+      id,
+      areaPct: wardAreaM2 > 0 ? ((areas.get(id) ?? 0) / wardAreaM2) * 100 : 0,
+    }));
+  }, [visibleFeatures, wardAreaM2]);
+
+  // Legend controls. Every group is on by default; the user switches groups off.
+  const [hiddenGroups, setHiddenGroups] = useState<LegendGroupId[]>([]);
+  const activeGroups = useMemo(
+    () => LEGEND_GROUP_IDS.filter((id) => !hiddenGroups.includes(id)),
+    [hiddenGroups]
+  );
+  const toggleGroup = useCallback((id: LegendGroupId) => {
+    setHiddenGroups((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }, []);
+  const [fillOpacity, setFillOpacity] = useState<number>(0.35);
+  const [showPatterns, setShowPatterns] = useState<boolean>(false);
+  // Reviewer view: outlines only. Held in memory only, so it resets on reload.
+  const [outlineOnly, setOutlineOnly] = useState<boolean>(false);
 
   // Ward bounding box for search viewbox constraint
   const wardBbox = useMemo<[number, number, number, number] | null>(() => {
@@ -292,6 +325,14 @@ export default function App() {
             <span className="truncate">{COPY.pilotBadgeVi}</span>
           </div>
 
+          {/* Legend chips: toggle each colour group on the map */}
+          <LegendChips
+            items={legendItems}
+            activeGroups={activeGroups}
+            onToggle={toggleGroup}
+            previewDraft={isDraftPreview}
+          />
+
           {isLoadingData && (
             <div
               role="status"
@@ -302,9 +343,29 @@ export default function App() {
           )}
         </div>
 
-        {/* Legend Overlay (Collapsible) */}
-        <aside aria-label="Chú giải bản đồ" className="absolute bottom-24 left-3 z-20 pointer-events-auto max-w-[280px]">
-          <Legend presentGroups={presentGroups} />
+        {/* Layer controls (collapsible) above the bottom sheet's peek height */}
+        <aside aria-label="Hiển thị bản đồ" className="absolute bottom-24 left-3 z-20 pointer-events-auto flex flex-col items-start gap-2">
+          {/* Reviewer view (preview only): compare edges with the source document. Not persisted. */}
+          {isDraftPreview && (
+            <button
+              type="button"
+              aria-pressed={outlineOnly}
+              onClick={() => setOutlineOnly((v) => !v)}
+              className={`min-h-[48px] px-4 rounded-2xl border shadow-xl text-sm font-medium cursor-pointer ${
+                outlineOnly
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white/95 text-slate-800 border-slate-200/90'
+              }`}
+            >
+              Chỉ viền
+            </button>
+          )}
+          <LayerControls
+            fillOpacity={fillOpacity}
+            onOpacityChange={(v) => setFillOpacity(Math.min(0.8, Math.max(0.1, v)))}
+            showPatterns={showPatterns}
+            onPatternsChange={setShowPatterns}
+          />
         </aside>
 
         {/* Interactive MapView */}
@@ -319,7 +380,14 @@ export default function App() {
             <MapView
               ward={ward}
               features={visibleFeatures}
+              selectedFeatures={selectedFeatures}
               activeCoordinate={activeCoordinate}
+              bottomPadding={sheetHeight}
+              activeGroups={activeGroups}
+              fillOpacity={fillOpacity}
+              showPatterns={showPatterns}
+              previewDraft={isDraftPreview}
+              outlineOnly={outlineOnly}
               onSelectLocation={handleMapSelect}
               isDarkTheme={isDarkTheme}
               onToggleTheme={toggleTheme}
@@ -335,6 +403,7 @@ export default function App() {
         adminUnits={adminUnits}
         onOpenReport={() => setIsReportOpen(true)}
         onClose={() => setLookupResult(null)}
+        onHeightChange={setSheetHeight}
       />
 
       {/* 6. REPORT DIALOG */}
