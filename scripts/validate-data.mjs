@@ -25,6 +25,9 @@ const errors = [];
 const warnings = [];
 const error = (where, msg) => errors.push(`${where}: ${msg}`);
 const warn = (where, msg) => warnings.push(`${where}: ${msg}`);
+/** Same warning for many draft/reviewed features: collected, printed once with the ids. */
+const groupedWarnings = new Map();
+const groupWarn = (key, id) => groupedWarnings.set(key, [...(groupedWarnings.get(key) ?? []), id]);
 
 function fail(msg) {
   console.error(`\n✖ validate-data: ${msg}\n`);
@@ -82,9 +85,11 @@ const wardPolys = (wardFc.features ?? []).filter((f) =>
   ['Polygon', 'MultiPolygon'].includes(f.geometry?.type)
 );
 if (wardPolys.length === 0) fail(`${rel(wardPath)} has no Polygon/MultiPolygon feature`);
+// Boundary lines of each ward feature, tagged with where they came from (for messages)
 const wardLines = wardPolys.flatMap((f) => {
   const l = turf.polygonToLine(f);
-  return l.type === 'FeatureCollection' ? l.features : [l];
+  const label = `${rel(wardPath)} feature #${wardFc.features.indexOf(f)}${f.properties?.id ? ` ("${f.properties.id}")` : ''}`;
+  return (l.type === 'FeatureCollection' ? l.features : [l]).map((line) => ({ line, label }));
 });
 
 const documents = readJson(documentsPath);
@@ -101,16 +106,30 @@ function inWard(pt) {
   return wardPolys.some((w) => turf.booleanPointInPolygon(pt, w));
 }
 
-/** Largest distance (m) that any vertex of `geom` lies outside the ward; 0 if all inside. */
-function maxOutsideWardM(geom) {
-  let max = 0;
-  for (const coord of turf.coordAll(geom)) {
-    const pt = turf.point(coord);
-    if (inWard(pt)) continue;
-    const d = Math.min(...wardLines.map((l) => turf.pointToLineDistance(pt, l, { units: 'meters' })));
-    if (d > max) max = d;
-  }
-  return max;
+/**
+ * Worst vertex of the polygon's OUTER ring(s) that is not inside the ward, with its
+ * distance in metres to the ward boundary. Holes are ignored. null if all inside.
+ */
+function worstOutsideWard(geom) {
+  const polygons = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+  let worst = null;
+  polygons.forEach((rings, polygonIndex) => {
+    const outer = rings[0] ?? [];
+    for (const coord of outer) {
+      const pt = turf.point(coord);
+      if (inWard(pt)) continue;
+      // Distance to the nearest ward boundary line
+      let nearest = null;
+      for (const { line, label } of wardLines) {
+        const m = turf.pointToLineDistance(pt, line, { units: 'meters' });
+        if (!nearest || m < nearest.m) nearest = { m, label };
+      }
+      if (nearest && (!worst || nearest.m > worst.m)) {
+        worst = { polygonIndex, coord, ...nearest };
+      }
+    }
+  });
+  return worst;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,20 +159,27 @@ features.forEach((f, i) => {
     counts[p.review_status]++;
   }
 
-  // Approved features must be fully traceable (SPEC rules 6 and 12)
-  if (p.review_status === 'approved') {
-    if (p.category_code === null || p.category_code === undefined) {
-      error(where, 'approved feature has a null category_code');
-    }
-    const doc = docsById.get(p.document_id);
-    if (!doc) {
-      error(where, `approved feature's document_id ${JSON.stringify(p.document_id)} is not in documents.json`);
-    } else if (!isDocumentVerified(doc)) {
-      error(where, `approved feature's document "${doc.id}" has no number and/or effective_date in documents.json`);
-    }
-    if (!reviewedIds.has(p.id)) {
-      error(where, 'approved feature has no entry in review_log.json');
-    }
+  // Review-related rules (SPEC rules 6 and 12): ERROR for approved, WARNING for draft/reviewed.
+  // Warnings for non-approved features are grouped per rule so the output stays readable.
+  const isApproved = p.review_status === 'approved';
+  const reviewRule = (msg, groupKey) => {
+    if (isApproved) error(where, `approved feature: ${msg}`);
+    else if (groupKey) groupWarn(groupKey, p.id ?? `#${i}`);
+    else warn(where, `${p.review_status} feature: ${msg}`);
+  };
+  if (isApproved && (p.category_code === null || p.category_code === undefined)) {
+    error(where, 'approved feature has a null category_code');
+  }
+  const doc = docsById.get(p.document_id);
+  if (!doc) {
+    reviewRule(`document_id ${JSON.stringify(p.document_id)} is not in documents.json`,
+      `document_id ${JSON.stringify(p.document_id)} is not in documents.json`);
+  } else if (!isDocumentVerified(doc)) {
+    reviewRule(`document "${doc.id}" has no number and/or effective_date in documents.json`,
+      `document "${doc.id}" has no number and/or effective_date in documents.json`);
+  }
+  if (!reviewedIds.has(p.id)) {
+    reviewRule('no entry in review_log.json', 'no entry in review_log.json');
   }
 
   // Geometry
@@ -162,9 +188,13 @@ features.forEach((f, i) => {
     error(where, `geometry must be Polygon or MultiPolygon (got ${type ?? 'none'})`);
     return;
   }
-  const outside = maxOutsideWardM(f.geometry);
-  if (outside > OUTSIDE_WARD_MAX_M) {
-    error(where, `lies outside ward_boundary.geojson by ${Math.round(outside)} m (limit ${OUTSIDE_WARD_MAX_M} m)`);
+  const worst = worstOutsideWard(f.geometry);
+  if (worst && worst.m > OUTSIDE_WARD_MAX_M) {
+    const ring = f.geometry.type === 'MultiPolygon' ? `polygon ${worst.polygonIndex} outer ring` : 'outer ring 0';
+    reviewRule(
+      `vertex lies ${worst.m.toFixed(1)} m outside the ward (limit ${OUTSIDE_WARD_MAX_M} m): ` +
+        `${ring}, lon ${worst.coord[0]}, lat ${worst.coord[1]}; compared against ${worst.label}`
+    );
   }
   const kinks = turf.kinks(f).features.length;
   if (kinks > 0) warn(where, `self-intersecting ring (${kinks} crossing point${kinks > 1 ? 's' : ''})`);
@@ -180,6 +210,11 @@ console.log(
     `(approved ${counts.approved}, reviewed ${counts.reviewed}, draft ${counts.draft}), ` +
     `${documents.length} documents, ${reviewLog.length} review log entries`
 );
+
+for (const [msg, ids] of groupedWarnings) {
+  const shown = ids.slice(0, 5).join(', ') + (ids.length > 5 ? `, +${ids.length - 5} more` : '');
+  warnings.push(`${ids.length} draft/reviewed feature(s): ${msg} (blocks approval) [${shown}]`);
+}
 
 if (warnings.length) {
   console.warn(`\n⚠ ${warnings.length} warning(s):`);
