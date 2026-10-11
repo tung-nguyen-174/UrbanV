@@ -344,11 +344,16 @@ export const MapView: React.FC<MapViewProps> = ({
     mapRef.current?.zoomOut();
   };
 
-  // "My Location" handler (strictly user-triggered, never sent anywhere)
+  // "My Location": requested only when the button is pressed. The position is used once
+  // for the lookup and is not kept in state, storage or any request.
+  const showGeoError = (msg: string) => {
+    setGeoError(msg);
+    setTimeout(() => setGeoError(null), 6000);
+  };
+
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
-      setGeoError('Trình duyệt không hỗ trợ định vị.');
-      setTimeout(() => setGeoError(null), 3000);
+      showGeoError('Trình duyệt này không hỗ trợ định vị.');
       return;
     }
 
@@ -359,19 +364,24 @@ export const MapView: React.FC<MapViewProps> = ({
       (pos) => {
         setIsLocating(false);
         const { longitude, latitude } = pos.coords;
-        const map = mapRef.current;
-        if (map) {
-          map.flyTo({ center: [longitude, latitude], zoom: 16 });
-        }
+        mapRef.current?.flyTo({ center: [longitude, latitude], zoom: 16 });
+        // Outside the ward, the lookup answers with COPY.outOfPilotVi in the result sheet
         onSelectLocation(longitude, latitude);
       },
       (err) => {
         setIsLocating(false);
-        console.warn('Geolocation error:', err);
-        setGeoError('Không thể lấy vị trí hiện tại.');
-        setTimeout(() => setGeoError(null), 3000);
+        // GeolocationPositionError codes: 1 = denied, 2 = unavailable, 3 = timeout
+        if (err.code === err.PERMISSION_DENIED) {
+          showGeoError('Bạn chưa cho phép truy cập vị trí. Hãy bật quyền vị trí cho trang này trong cài đặt trình duyệt.');
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          showGeoError('Không xác định được vị trí hiện tại. Thử lại ở nơi có tín hiệu tốt hơn.');
+        } else if (err.code === err.TIMEOUT) {
+          showGeoError('Lấy vị trí mất quá lâu. Vui lòng thử lại.');
+        } else {
+          showGeoError('Không thể lấy vị trí hiện tại.');
+        }
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
   };
 
