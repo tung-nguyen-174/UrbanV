@@ -8,7 +8,8 @@ const GROUP_NOTE = 'Một số nhóm màu gồm nhiều mã đất; chưa phân 
 export interface LegendItem {
   id: LegendGroupId;
   /** Share of the ward's area covered by this group, in percent. */
-  areaPct: number;
+  /** Share of the ward, in percent; null while the share file has not loaded. */
+  areaPct: number | null;
 }
 
 interface LegendChipsProps {
@@ -50,7 +51,7 @@ export const LegendChips: React.FC<LegendChipsProps> = ({
             {items.map(({ id, areaPct }) => {
               const group = LEGEND_GROUPS[id];
               const pressed = activeGroups.includes(id);
-              const pct = areaPct < 1 ? '<1%' : `~${Math.round(areaPct)}%`;
+              const pct = areaPct === null ? '' : areaPct < 1 ? '<1%' : `~${Math.round(areaPct)}%`;
               return (
                 <button
                   key={id}

@@ -1,0 +1,14 @@
+{
+  "computed": "2026-10-11",
+  "ward_area_m2": 24968211,
+  "source": "features.geojson, clipped to ward_boundary.geojson",
+  "shares": {
+    "AQUA_NTS_MNC": 0.0263,
+    "ODT": 0.6855,
+    "SALMON": 0.1916,
+    "HNK": 0.0156,
+    "NTD": 0.0045,
+    "SKS_DRA": 0.0027,
+    "RDD": 0
+  }
+}

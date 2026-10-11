@@ -198,13 +198,15 @@ features.forEach((f, i) => {
     const ring = f.geometry.type === 'MultiPolygon' ? `polygon ${worst.polygonIndex} outer ring` : 'outer ring 0';
     reviewRule(
       `vertex lies ${worst.m.toFixed(1)} m outside the ward (limit ${OUTSIDE_WARD_MAX_M} m): ` +
-        `${ring}, lon ${worst.coord[0]}, lat ${worst.coord[1]}; compared against ${worst.label}`
+        `${ring}, lon ${worst.coord[0]}, lat ${worst.coord[1]}; compared against ${worst.label}`,
+      `vertex more than ${OUTSIDE_WARD_MAX_M} m outside the ward`
     );
   }
+  // Geometry warnings are grouped too: a full-sheet draft can have thousands of small blocks
   const kinks = turf.kinks(f).features.length;
-  if (kinks > 0) warn(where, `self-intersecting ring (${kinks} crossing point${kinks > 1 ? 's' : ''})`);
+  if (kinks > 0) groupWarn(`self-intersecting ring`, p.id ?? `#${i}`);
   const ha = turf.area(f) / 10000;
-  if (ha < SMALL_POLYGON_HA) warn(where, `small polygon: ${ha.toFixed(3)} ha (< ${SMALL_POLYGON_HA} ha)`);
+  if (ha < SMALL_POLYGON_HA) groupWarn(`polygon under ${SMALL_POLYGON_HA} ha`, p.id ?? `#${i}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -218,7 +220,8 @@ console.log(
 
 for (const [msg, ids] of groupedWarnings) {
   const shown = ids.slice(0, 5).join(', ') + (ids.length > 5 ? `, +${ids.length - 5} more` : '');
-  warnings.push(`${ids.length} draft/reviewed feature(s): ${msg} (blocks approval) [${shown}]`);
+  const blocks = /^(document|no entry)/.test(msg) ? ' (blocks approval)' : '';
+  warnings.push(`${ids.length} feature(s): ${msg}${blocks} [${shown}]`);
 }
 
 if (warnings.length) {
