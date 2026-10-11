@@ -76,6 +76,8 @@ interface ResultSheetProps {
   adminUnits: AdminUnit[];
   onOpenReport: () => void;
   onClose: () => void;
+  /** Reports the sheet's height in px once it has finished snapping (0 when hidden). */
+  onHeightChange?: (px: number) => void;
 }
 
 export type SnapState = 'collapsed' | 'half' | 'full';
@@ -85,11 +87,31 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
   documents,
   adminUnits,
   onOpenReport,
-  onClose,
+  onHeightChange,
 }) => {
   const [snap, setSnap] = useState<SnapState>('half');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+
+  // Report the height after each snap change has finished animating (transition is 300 ms)
+  const hasResult = result !== null;
+  useEffect(() => {
+    if (!onHeightChange) return;
+    if (!hasResult) {
+      onHeightChange(0);
+      return;
+    }
+    const measure = () => {
+      if (sheetRef.current) onHeightChange(sheetRef.current.offsetHeight);
+    };
+    const timer = window.setTimeout(measure, 320);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('resize', measure);
+    };
+  }, [snap, hasResult, onHeightChange]);
 
   // Move focus to the sheet title whenever a new result opens
   useEffect(() => {
@@ -182,6 +204,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
 
   return (
     <section
+      ref={sheetRef}
       aria-label="Kết quả tra cứu"
       className={`fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-[#0B101D]/95 backdrop-blur-2xl border-t border-slate-200/90 dark:border-white/12 rounded-t-3xl shadow-2xl transition-all duration-300 ease-out flex flex-col pb-[env(safe-area-inset-bottom)] motion-reduce:transition-none ${heightClass}`}
     >
@@ -238,6 +261,11 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                 className="text-base font-semibold text-slate-900 dark:text-white truncate outline-none"
               >
                 {statusInfo.labelVi}
+                {result.matches.some((m) => m.properties.review_status !== 'approved') && (
+                  <span className="ml-2 align-middle shrink-0 inline-block rounded-md px-1.5 py-0.5 text-sm font-medium bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200">
+                    Bản nháp
+                  </span>
+                )}
               </h2>
               <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
                 {primaryMatch ? (

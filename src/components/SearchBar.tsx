@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { Search, Loader2, X, MapPin } from 'lucide-react';
-import { COPY } from '../taxonomy';
 
 export interface PlaceResult {
   lng: number;
@@ -148,10 +147,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
   return (
     <div className="w-full relative z-20">
+      <div className="bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 transition-all focus-within:ring-2 focus-within:ring-teal-500/50">
       <form
         onSubmit={handleSearch}
         aria-busy={isLoading}
-        className="flex items-center gap-1.5 sm:gap-2 bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 p-1 sm:p-1.5 transition-all focus-within:ring-2 focus-within:ring-teal-500/50"
+        className="flex items-center gap-1.5 sm:gap-2 p-1 sm:p-1.5"
       >
         <div className="pl-2 sm:pl-3 text-slate-600 dark:text-slate-500 shrink-0">
           <MapPin className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -166,7 +166,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             if (searchError) setSearchError(null);
             if (choices) setChoices(null);
           }}
-          placeholder="Tìm đường hoặc địa điểm trong Phường Hạc Thành"
+          placeholder="Tìm đường hoặc địa điểm"
           aria-label="Tìm đường hoặc địa điểm"
           className="w-full min-w-0 flex-1 bg-transparent text-[13px] sm:text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-500 focus:outline-none px-1.5 sm:px-2 py-2"
         />
@@ -202,6 +202,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           )}
         </button>
       </form>
+      {/* Label under the input and the hint, both inside the search card */}
+      <div className="px-3 pb-2 space-y-0.5 text-sm">
+        <p className="font-medium text-slate-900 dark:text-white">Trong Phường Hạc Thành</p>
+        <p className="text-slate-700 dark:text-slate-300">Nhấn Enter hoặc nút Tìm để tra cứu</p>
+      </div>
+      </div>
 
       {isLoading && (
         <div role="status" className="mt-1.5 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
@@ -247,11 +253,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         </div>
       )}
 
-      {/* Subtle attribution info / hint text */}
-      <div className="px-3 pt-1.5 flex items-center justify-between text-sm text-slate-600 dark:text-slate-300">
-        <span>Nhấn Enter hoặc nút Tìm để tra cứu</span>
-        <span>{COPY.osmAttributionVi}</span>
-      </div>
     </div>
   );
 };

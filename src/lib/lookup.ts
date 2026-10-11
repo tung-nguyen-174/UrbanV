@@ -57,22 +57,23 @@ function distanceToBoundaryM(
       return null;
     }
 
+    // polygonToLine returns a MultiLineString for polygons with holes (outer ring + inner rings).
+    // pointToLineDistance only takes a LineString, so measure each ring separately.
     const lines = turf.polygonToLine(feature as Feature<Polygon | MultiPolygon>);
     if (!lines) return null;
+    const parts = lines.type === 'FeatureCollection' ? lines.features : [lines];
 
-    if (lines.type === 'FeatureCollection') {
-      let minDistance = Infinity;
-      for (const line of lines.features) {
-        const d = turf.pointToLineDistance(pt, line as any, { units: 'meters' });
-        if (d < minDistance) {
-          minDistance = d;
-        }
+    let minDistance = Infinity;
+    for (const part of parts) {
+      const geom = part.geometry;
+      const rings =
+        geom.type === 'LineString' ? [geom.coordinates] : geom.type === 'MultiLineString' ? geom.coordinates : [];
+      for (const coords of rings) {
+        const d = turf.pointToLineDistance(pt, turf.lineString(coords), { units: 'meters' });
+        if (d < minDistance) minDistance = d;
       }
-      return Number.isFinite(minDistance) ? Math.round(minDistance) : null;
-    } else if (lines.type === 'Feature') {
-      const d = turf.pointToLineDistance(pt, lines as any, { units: 'meters' });
-      return Number.isFinite(d) ? Math.round(d) : null;
     }
+    return Number.isFinite(minDistance) ? Math.round(minDistance) : null;
   } catch {
     // Spatial error fallback
   }

@@ -281,7 +281,7 @@ export const UrbanVLogo: React.FC<UrbanVLogoProps> = ({
 
         {showSubtitle && (
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-['Sora',sans-serif] truncate leading-tight">
-            Geospatial Intelligence
+            Tra cứu quy hoạch
           </span>
         )}
       </div>
