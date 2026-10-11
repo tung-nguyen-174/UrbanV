@@ -19,7 +19,13 @@
   <body>
     <!-- Hidden Netlify form for error reporting -->
     <form name="report-error" data-netlify="true" netlify-honeypot="bot-field" hidden>
-      <input name="bot-field" /><input name="lng" /><input name="lat" /><textarea name="message"></textarea><input name="feature_ids" />
+      <input type="hidden" name="form-name" value="report-error" />
+      <input name="bot-field" />
+      <input name="message" maxlength="1000" />
+      <input name="lng" />
+      <input name="lat" />
+      <input name="feature_ids" />
+      <input name="page_url" />
     </form>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
