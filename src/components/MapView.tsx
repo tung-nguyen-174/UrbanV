@@ -5,7 +5,15 @@ import maplibreglWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { Locate, Plus, Minus, Sun, Moon } from 'lucide-react';
-import { featureTitleVi, fillColorExpression, outlineColorExpression } from '../taxonomy';
+import {
+  featureTitleVi,
+  fillColorExpression,
+  LEGEND_GROUP_IDS,
+  LEGEND_GROUPS,
+  outlineColorExpression,
+  type LegendGroupId,
+  type PatternId,
+} from '../taxonomy';
 import type { PlanningFeature, PlanningFeatureCollection } from '../types';
 import { createCentroidLabels, EMPTY_FEATURE_COLLECTION } from '../lib/data';
 
@@ -14,9 +22,102 @@ if (typeof window !== 'undefined') {
   maplibregl.setWorkerUrl('/maplibre-gl-worker.mjs');
 }
 
+/** Plan layers that take the group filter and the publishable filter. */
+const PLAN_LAYERS = ['features-fill', 'features-outline-halo', 'features-outline'];
+const PATTERN_IDS: PatternId[] = [
+  'solid', 'diagonal', 'dots', 'cross', 'horizontal', 'vertical', 'grid', 'waves', 'diamond',
+];
+const patternLayerId = (id: LegendGroupId) => `features-pattern-${id}`;
+
+/** Draws one small repeating tile for a legend pattern (used with map.addImage). */
+function drawPatternTile(pattern: PatternId): ImageData {
+  const size = 24;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.8)';
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  const line = (x1: number, y1: number, x2: number, y2: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  };
+  switch (pattern) {
+    case 'solid':
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.18)';
+      ctx.fillRect(0, 0, size, size);
+      break;
+    case 'diagonal':
+      for (let k = -size; k <= size; k += 8) line(k, 0, k + size, size);
+      break;
+    case 'dots':
+      for (const [x, y] of [[6, 6], [18, 18], [18, 6], [6, 18]]) {
+        ctx.beginPath();
+        ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    case 'cross':
+      line(12, 0, 12, size);
+      line(0, 12, size, 12);
+      break;
+    case 'horizontal':
+      line(0, 6, size, 6);
+      line(0, 18, size, 18);
+      break;
+    case 'vertical':
+      line(6, 0, 6, size);
+      line(18, 0, 18, size);
+      break;
+    case 'grid':
+      line(0, 0, size, 0);
+      line(0, 0, 0, size);
+      break;
+    case 'waves':
+      for (const y of [6, 18]) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.quadraticCurveTo(6, y - 4, 12, y);
+        ctx.quadraticCurveTo(18, y + 4, 24, y);
+        ctx.stroke();
+      }
+      break;
+    case 'diamond':
+      ctx.beginPath();
+      ctx.moveTo(12, 2);
+      ctx.lineTo(22, 12);
+      ctx.lineTo(12, 22);
+      ctx.lineTo(2, 12);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+  }
+  return ctx.getImageData(0, 0, size, size);
+}
+
+/** Adds the pattern images once per style (a style change clears them). */
+function ensurePatternImages(map: maplibregl.Map) {
+  for (const p of PATTERN_IDS) {
+    const name = `pattern-${p}`;
+    if (!map.hasImage(name)) map.addImage(name, drawPatternTile(p), { pixelRatio: 2 });
+  }
+}
+
 interface MapViewProps {
   ward: FeatureCollection<Geometry, { [key: string]: unknown }>;
   features: PlanningFeature[];
+  /** Legend groups switched on; the others are hidden on the map. */
+  activeGroups: LegendGroupId[];
+  /** Fill opacity from the slider (0.1 to 0.8). */
+  fillOpacity: number;
+  /** Show the pattern fill above the solid fill. */
+  showPatterns: boolean;
+  /** Preview mode also shows draft features. */
+  previewDraft: boolean;
   /** Features matched by the last lookup, drawn as a highlight. */
   selectedFeatures: PlanningFeature[];
   activeCoordinate: [number, number] | null;
@@ -36,6 +137,10 @@ export const MapView: React.FC<MapViewProps> = ({
   selectedFeatures,
   activeCoordinate,
   bottomPadding,
+  activeGroups,
+  fillOpacity,
+  showPatterns,
+  previewDraft,
   onSelectLocation,
   isDarkTheme,
   onToggleTheme,
@@ -67,6 +172,48 @@ export const MapView: React.FC<MapViewProps> = ({
       return EMPTY_FEATURE_COLLECTION;
     }
   }, [ward]);
+
+  // Live layer controls: group filter, fill opacity, pattern layers. Read through a ref so
+  // map handlers and setupLayers always see the current values.
+  const controlsRef = useRef({ activeGroups, fillOpacity, showPatterns, previewDraft, hasSelection: false });
+  controlsRef.current = {
+    activeGroups,
+    fillOpacity,
+    showPatterns,
+    previewDraft,
+    hasSelection: selectedFeatures.length > 0,
+  };
+
+  const applyLayerControls = useCallback((map: maplibregl.Map) => {
+    const c = controlsRef.current;
+    const statuses = c.previewDraft ? ['approved', 'reviewed', 'draft'] : ['approved'];
+    // Publishable filter (as in filterVisibleFeatures), combined with the group filter
+    const publishable = ['in', ['get', 'review_status'], ['literal', statuses]];
+    const groupOn = ['in', ['get', 'legend_group'], ['literal', c.activeGroups]];
+
+    for (const id of PLAN_LAYERS) {
+      if (map.getLayer(id)) map.setFilter(id, ['all', publishable, groupOn] as any);
+    }
+
+    // Selected blocks stand out: the plain fill steps back to 0.2 while something is selected
+    if (map.getLayer('features-fill')) {
+      map.setPaintProperty(
+        'features-fill',
+        'fill-opacity',
+        c.hasSelection
+          ? 0.2
+          : (['step', ['zoom'], Math.min(0.8, c.fillOpacity + 0.15), 13, c.fillOpacity] as any)
+      );
+    }
+
+    for (const id of LEGEND_GROUP_IDS) {
+      const layerId = patternLayerId(id);
+      if (!map.getLayer(layerId)) continue;
+      map.setFilter(layerId, ['all', ['==', ['get', 'legend_group'], id], publishable, groupOn] as any);
+      const on = c.showPatterns && c.activeGroups.includes(id);
+      map.setLayoutProperty(layerId, 'visibility', on ? 'visible' : 'none');
+    }
+  }, []);
 
   // Set up or update layers & sources
   const setupLayers = useCallback(
@@ -209,12 +356,23 @@ export const MapView: React.FC<MapViewProps> = ({
           selectionCollection as any
         );
       }
-      // While something is selected, the plain plan fill steps back so the selection stands out
-      if (map.getLayer('features-fill')) {
-        map.setPaintProperty(
-          'features-fill',
-          'fill-opacity',
-          hasSelection ? 0.2 : (['step', ['zoom'], 0.5, 13, 0.35] as any)
+      // 2c. Pattern layers, one per legend group, above the solid fill. Each has a group filter
+      // and is hidden until the pattern toggle is on.
+      ensurePatternImages(map);
+      for (const id of LEGEND_GROUP_IDS) {
+        if (map.getLayer(patternLayerId(id))) continue;
+        map.addLayer(
+          {
+            id: patternLayerId(id),
+            type: 'fill',
+            source: 'features-source',
+            layout: { visibility: 'none' },
+            paint: {
+              'fill-pattern': `pattern-${LEGEND_GROUPS[id].pattern}`,
+              'fill-opacity': 0.9,
+            },
+          } as any,
+          'features-outline-halo'
         );
       }
 
@@ -281,8 +439,11 @@ export const MapView: React.FC<MapViewProps> = ({
           map.getSource('centroid-labels-source') as maplibregl.GeoJSONSource
         ).setData(centroidData as any);
       }
+
+      // Re-apply the live controls (group filter, opacity, patterns) to the new layers
+      applyLayerControls(map);
     },
-    [features, selectedFeatures, ward, getMaskGeoJson, isDarkTheme]
+    [features, selectedFeatures, ward, getMaskGeoJson, isDarkTheme, applyLayerControls]
   );
   // Map event handlers registered once must call the latest setupLayers, not a stale closure
   const setupLayersRef = useRef(setupLayers);
@@ -458,14 +619,21 @@ export const MapView: React.FC<MapViewProps> = ({
     }
   }, [activeCoordinate]);
 
+  // Changing the group filter, opacity or patterns updates the layers without rebuilding them
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    applyLayerControls(map);
+  }, [activeGroups, fillOpacity, showPatterns, previewDraft, selectedFeatures, applyLayerControls]);
+
   // Keep the tapped point and its matched block above the bottom sheet.
   // With a selection: fit to the selected blocks and the tapped point (zoom at most 17).
   // With only a tap: centre on the tapped point. Otherwise: just apply the padding.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    // Top inset clears the search card and pilot badge, which sit over the map's top edge
-    const topInset = window.innerWidth < 640 ? 170 : 130;
+    // Top inset clears the search card, pilot badge and legend chips, which sit over the map's top edge
+    const topInset = window.innerWidth < 640 ? 240 : 200;
     const viewPadding = { top: topInset, left: 0, right: 0, bottom: bottomPadding };
 
     const apply = () => {
@@ -563,7 +731,7 @@ export const MapView: React.FC<MapViewProps> = ({
       <div ref={mapContainerRef} className="w-full h-full" />
 
       {/* Floating Map Controls (Right Side) */}
-      <nav aria-label="Điều khiển bản đồ" className="absolute top-60 right-3 z-20 flex flex-col gap-2">
+      <nav aria-label="Điều khiển bản đồ" className="absolute top-[340px] right-3 z-20 flex flex-col gap-2">
         {/* Zoom Controls */}
         <div className="flex flex-col bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 overflow-hidden">
           <button
