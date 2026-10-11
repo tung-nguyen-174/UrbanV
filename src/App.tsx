@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { Bookmark, AlertTriangle, AlertCircle, X, Sparkles, MapPin, Trash2 } from 'lucide-react';
@@ -36,8 +36,10 @@ export default function App() {
   const [allFeatures, setAllFeatures] = useState<PlanningFeature[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [adminUnits, setAdminUnits] = useState<AdminUnit[]>([]);
-  const [isWardEmpty, setIsWardEmpty] = useState<boolean>(false);
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+  // Lookups run only when ward, features and documents have all loaded successfully
+  const isDataReady = !isLoadingData && loadErrors.length === 0;
 
   // App settings & Preferences
   const [isDarkTheme, setIsDarkTheme] = useState<boolean>(false);
@@ -91,10 +93,14 @@ export default function App() {
   // Execute lookup
   const runLookupAt = useCallback(
     (lng: number, lat: number) => {
+      // Never answer from empty or partially loaded data
+      if (!isDataReady) return;
+
       setActiveCoordinate([lng, lat]);
 
       const res = lookup(lng, lat, ward, visibleFeatures, {
         previewMode: isDraftPreview,
+        documents,
       });
       setLookupResult(res);
 
@@ -108,8 +114,15 @@ export default function App() {
         // Ignore history errors
       }
     },
-    [ward, visibleFeatures, isDraftPreview]
+    [ward, visibleFeatures, documents, isDraftPreview, isDataReady]
   );
+
+  // MapView registers its click handler once, so route taps through a ref to the latest runLookupAt
+  const runLookupRef = useRef(runLookupAt);
+  runLookupRef.current = runLookupAt;
+  const handleMapSelect = useCallback((lng: number, lat: number) => {
+    runLookupRef.current(lng, lat);
+  }, []);
 
   // Initial data loading
   useEffect(() => {
@@ -124,28 +137,8 @@ export default function App() {
       setAllFeatures(data.features.features || []);
       setDocuments(data.documents);
       setAdminUnits(data.adminUnits);
-      setIsWardEmpty(data.wardLoadError);
+      setLoadErrors(data.loadErrors);
       setIsLoadingData(false);
-
-      // Check initial URL hash for #lng=...&lat=...
-      try {
-        const hash = window.location.hash;
-        if (hash) {
-          const params = new URLSearchParams(hash.replace('#', ''));
-          const lng = parseFloat(params.get('lng') || '');
-          const lat = parseFloat(params.get('lat') || '');
-          if (Number.isFinite(lng) && Number.isFinite(lat)) {
-            // Initial coordinate lookup
-            const res = lookup(lng, lat, data.ward, data.features.features || [], {
-              previewMode: isDraftPreview,
-            });
-            setActiveCoordinate([lng, lat]);
-            setLookupResult(res);
-          }
-        }
-      } catch {
-        // Hash parsing fallback
-      }
     }
 
     loadData();
@@ -154,6 +147,21 @@ export default function App() {
       isMounted = false;
     };
   }, [isDraftPreview]);
+
+  // Shared link #lng=...&lat=...: look it up once, after all data is ready
+  const didHashLookupRef = useRef(false);
+  useEffect(() => {
+    if (!isDataReady || didHashLookupRef.current) return;
+    didHashLookupRef.current = true;
+    try {
+      const params = new URLSearchParams(window.location.hash.replace('#', ''));
+      const lng = parseFloat(params.get('lng') || '');
+      const lat = parseFloat(params.get('lat') || '');
+      if (Number.isFinite(lng) && Number.isFinite(lat)) runLookupAt(lng, lat);
+    } catch {
+      // Hash parsing fallback
+    }
+  }, [isDataReady, runLookupAt]);
 
   // Toggle large text
   const toggleLargeText = () => {
@@ -237,11 +245,16 @@ export default function App() {
         </div>
       )}
 
-      {/* 3. WARD LOAD WARNING (If ward_boundary.geojson is empty) */}
-      {isWardEmpty && (
-        <div className="shrink-0 bg-amber-500 text-slate-950 px-4 py-2 text-xs font-medium flex items-center justify-center gap-2 z-30">
+      {/* 3. DATA LOAD ERROR (lookups stay disabled until a reload succeeds) */}
+      {loadErrors.length > 0 && (
+        <div
+          role="alert"
+          className="shrink-0 bg-amber-500 text-slate-950 px-4 py-2 text-xs font-medium flex items-center justify-center gap-2 z-30"
+        >
           <AlertCircle className="w-4 h-4 shrink-0 text-slate-950" />
-          <span>Chưa tải được ranh giới phường (bản đồ định vị tạm thời tại trung tâm Thanh Hóa)</span>
+          <span>
+            Không tải được dữ liệu ({loadErrors.join(', ')}). Chưa thể tra cứu, hãy tải lại trang.
+          </span>
         </div>
       )}
 
@@ -259,6 +272,15 @@ export default function App() {
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
             <span className="truncate">{COPY.pilotBadgeVi}</span>
           </div>
+
+          {isLoadingData && (
+            <div
+              role="status"
+              className="self-start bg-slate-900/85 text-white px-3.5 py-1.5 rounded-xl text-sm font-medium shadow-xs"
+            >
+              Đang tải dữ liệu…
+            </div>
+          )}
         </div>
 
         {/* Legend Overlay (Collapsible) */}
@@ -271,7 +293,7 @@ export default function App() {
           ward={ward}
           features={visibleFeatures}
           activeCoordinate={activeCoordinate}
-          onSelectLocation={runLookupAt}
+          onSelectLocation={handleMapSelect}
           isDarkTheme={isDarkTheme}
           onToggleTheme={toggleTheme}
         />
