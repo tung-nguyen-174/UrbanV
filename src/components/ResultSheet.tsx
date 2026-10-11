@@ -10,7 +10,6 @@ import {
   Minimize2,
   Check,
   FileText,
-  MapPin,
   Calendar,
   Clock,
   Building,
@@ -20,6 +19,7 @@ import {
   COPY,
   featureTitleVi,
   getGroup,
+  getLandUse,
   isDocumentVerified,
 } from '../taxonomy';
 import type {
@@ -56,6 +56,19 @@ const MatchTitle: React.FC<{ props: PlanningFeatureProperties; className?: strin
     <span>{featureTitleVi(props)}</span>
   </span>
 );
+
+/** ISO yyyy-mm-dd -> dd/mm/yyyy; anything else (empty, malformed) -> COPY.unknownVi. */
+export function formatDateVi(iso: string | null | undefined): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return COPY.unknownVi;
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/** Only http(s) links are shown as "Xem văn bản gốc". */
+function safeOfficialUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return /^https?:\/\//.test(url) ? url : null;
+}
 
 interface ResultSheetProps {
   result: LookupResult | null;
@@ -139,6 +152,17 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
       : 'h-[88dvh] max-h-[92dvh]';
 
   const primaryMatch: PlanningFeature | undefined = result.matches[0];
+  const primaryProps = primaryMatch?.properties;
+  const primaryDoc = findDoc(primaryProps?.document_id);
+  const primaryOfficialUrl = safeOfficialUrl(primaryDoc?.official_url);
+
+  // One plain sentence: the code's own plainVi when the code is resolved and has one,
+  // otherwise the status sentence. Nothing is invented for other codes.
+  const plainSentence =
+    getLandUse(primaryProps?.category_code)?.plainVi ?? result.message;
+
+  const isAnyTransitional = result.matches.some((m) => m.properties.transitional);
+  const predecessors = hacThanhAdmin?.predecessors ?? [];
 
   return (
     <div
@@ -186,8 +210,8 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
               <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
                 {primaryMatch ? (
                   <>
-                    <GroupSwatch legendGroup={primaryMatch.properties.legend_group} />
-                    <span className="truncate">{featureTitleVi(primaryMatch.properties)}</span>
+                    <GroupSwatch legendGroup={primaryProps?.legend_group} />
+                    <span className="truncate">{featureTitleVi(primaryProps)}</span>
                     {result.matches.length > 1 && (
                       <span className="shrink-0">+{result.matches.length - 1}</span>
                     )}
@@ -255,70 +279,38 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
         </div>
       </div>
 
-      {/* Scrollable Content (visible in half and full) */}
+      {/* Scrollable Content (visible in half and full), in card order */}
       {snap !== 'collapsed' && (
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-5">
-          {/* Plain Vietnamese sentence (Body text: 16px) */}
-          <div className="space-y-1">
-            <p className="text-base text-slate-800 dark:text-slate-100 leading-relaxed font-medium">
-              {result.message}
-            </p>
-          </div>
+          {/* 1. One plain sentence (Body text: 16px) */}
+          <p className="text-base text-slate-800 dark:text-slate-100 leading-relaxed font-medium">
+            {plainSentence}
+          </p>
 
-          {/* Quick metadata grid */}
+          {/* 2. Land-use label */}
           {primaryMatch && (
-            <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 space-y-3">
-              <div className="space-y-1">
-                <span className="text-sm text-slate-400">Phân loại đất</span>
-                {result.matches.map((m, idx) => (
-                  <MatchTitle
-                    key={m.properties.id || idx}
-                    props={m.properties}
-                    className="text-base font-semibold text-slate-900 dark:text-white"
-                  />
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-sm">
-                <div>
-                  <span className="text-slate-400 flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    {COPY.effectiveFromVi}
-                  </span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">
-                    {primaryMatch.properties.effective_date || COPY.unknownVi}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400 flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    {COPY.lastUpdatedVi}
-                  </span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">
-                    {primaryMatch.properties.last_checked || COPY.unknownVi}
-                  </span>
-                </div>
-              </div>
-
-              {primaryMatch.properties.version_label && (
-                <div className="text-sm pt-1">
-                  <span className="text-slate-400">Phiên bản quy hoạch: </span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">
-                    {primaryMatch.properties.version_label}
-                  </span>
-                </div>
-              )}
+            <div className="space-y-1">
+              <span className="text-sm text-slate-400">Phân loại đất</span>
+              {result.matches.map((m, idx) => (
+                <MatchTitle
+                  key={m.properties.id || idx}
+                  props={m.properties}
+                  className="text-base font-semibold text-slate-900 dark:text-white"
+                />
+              ))}
             </div>
           )}
 
-          {/* Reasons / Evaluation factors */}
+          {/* 3. Reasons */}
           {result.reasons && result.reasons.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
                 Căn cứ đánh giá trạng thái
               </h3>
               <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
-                {result.reasons.map((r, idx) => (
+                {result.reasons
+                  .filter((r) => !(isAnyTransitional && r === COPY.transitionalVi)) // shown once, as the note below
+                  .map((r, idx) => (
                   <li key={idx} className="flex items-start gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 mt-2 shrink-0" />
                     <span className="leading-snug">{r}</span>
@@ -328,7 +320,119 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
             </div>
           )}
 
-          {/* Full detail view (All matches, Legal Documents, Administrative Predecessors) */}
+          {/* 4. Dates */}
+          {primaryProps && (
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-sm">
+              <div>
+                <span className="text-slate-400 flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  {COPY.effectiveFromVi}
+                </span>
+                <span className="font-medium text-slate-800 dark:text-slate-200">
+                  {formatDateVi(primaryProps.effective_date ?? primaryDoc?.effective_date)}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  {COPY.lastUpdatedVi}
+                </span>
+                <span className="font-medium text-slate-800 dark:text-slate-200">
+                  {formatDateVi(primaryProps.last_checked)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* 5. Document line */}
+          {primaryMatch && (
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 text-sm space-y-2">
+              <div className="flex items-start gap-2">
+                <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <div className="space-y-1 flex-1 min-w-0">
+                  <span className="font-semibold text-slate-900 dark:text-white block">
+                    {primaryDoc?.title || COPY.unknownVi}
+                  </span>
+                  <div className="text-slate-600 dark:text-slate-400 text-xs space-y-0.5">
+                    <div>Số hiệu: {primaryDoc?.number || COPY.unknownVi}</div>
+                    <div>Cơ quan ban hành: {primaryDoc?.authority || COPY.unknownVi}</div>
+                    <div>
+                      Trang tài liệu căn cứ:{' '}
+                      {primaryProps?.source_page ? `Trang ${primaryProps.source_page}` : COPY.unknownVi}
+                    </div>
+                  </div>
+                  {!isDocumentVerified(primaryDoc) && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300 leading-snug">
+                      {COPY.mapSourceNoteVi}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {primaryOfficialUrl ? (
+                <a
+                  href={primaryOfficialUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:underline font-medium text-sm min-h-[36px]"
+                >
+                  <span>{COPY.viewSourceVi}</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              ) : (
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex items-center gap-1.5 text-slate-400 font-medium text-sm min-h-[36px] cursor-not-allowed"
+                  >
+                    <span>{COPY.viewSourceVi}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{COPY.noOfficialLinkVi}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 6. Administrative path with old names */}
+          <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs space-y-2">
+            <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-medium">
+              <Building className="w-4 h-4 text-slate-500" />
+              <span>{COPY.adminPathVi}</span>
+            </div>
+            {predecessors.length > 0 && (
+              <div className="text-slate-500 dark:text-slate-400 leading-relaxed text-xs pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                  {COPY.oldNamesVi}:{' '}
+                </span>
+                <span>{predecessors.join(', ')}</span>
+              </div>
+            )}
+          </div>
+
+          {/* 7. Transitional note */}
+          {isAnyTransitional && (
+            <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900">
+              <strong>Lưu ý:</strong> {COPY.transitionalVi}
+            </div>
+          )}
+
+          {/* 8. How to verify (uncertain only) */}
+          {result.status === 'uncertain' && (
+            <div className="p-3 rounded-xl border border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 text-sm text-slate-800 dark:text-slate-200 space-y-1">
+              <h3 className="font-semibold">{COPY.verifyTitleVi}</h3>
+              <p className="leading-snug">{COPY.verifyHowVi}</p>
+            </div>
+          )}
+
+          {/* 9. Disclaimer */}
+          <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 rounded-xl border border-amber-200/60 dark:border-amber-900/60 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+            <p className="leading-snug">{COPY.disclaimerVi}</p>
+          </div>
+
+          {/* Full detail view (per-match details and actions) */}
           {snap === 'full' && (
             <div className="space-y-6 pt-2 border-t border-slate-100 dark:border-slate-800">
               {/* Detailed matching zones */}
@@ -348,6 +452,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                     const props = match.properties;
                     const doc = findDoc(props.document_id);
                     const areaHa = computeAreaHa(match);
+                    const officialUrl = safeOfficialUrl(doc?.official_url);
 
                     return (
                       <div
@@ -387,12 +492,12 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                             <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
                             <div className="space-y-1 flex-1">
                               <span className="font-semibold text-slate-900 dark:text-white block">
-                                {doc?.title || 'Chưa có thông tin tên văn bản'}
+                                {doc?.title || COPY.unknownVi}
                               </span>
                               <div className="text-slate-500 dark:text-slate-400 space-y-0.5 text-[11px]">
                                 <div>Số hiệu: {doc?.number || COPY.unknownVi}</div>
                                 <div>
-                                  {COPY.effectiveFromVi}: {doc?.effective_date || COPY.unknownVi}
+                                  {COPY.effectiveFromVi}: {formatDateVi(doc?.effective_date)}
                                 </div>
                                 <div>Cơ quan ban hành: {doc?.authority || COPY.unknownVi}</div>
                                 <div>
@@ -400,19 +505,14 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                                   {props.source_page ? `Trang ${props.source_page}` : COPY.unknownVi}
                                 </div>
                               </div>
-                              {!isDocumentVerified(doc) && (
-                                <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-snug">
-                                  {COPY.mapSourceNoteVi}
-                                </p>
-                              )}
                             </div>
                           </div>
 
                           {/* Official URL link */}
                           <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                            {doc?.official_url ? (
+                            {officialUrl ? (
                               <a
-                                href={doc.official_url}
+                                href={officialUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:underline font-medium text-xs min-h-[36px]"
@@ -427,41 +527,10 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                             )}
                           </div>
                         </div>
-
-                        {/* Transitional note */}
-                        {props.transitional && (
-                          <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900">
-                            <strong>Lưu ý:</strong> {COPY.transitionalVi}
-                          </div>
-                        )}
                       </div>
                     );
                   })
                 )}
-              </div>
-
-              {/* Administrative hierarchy & Predecessors */}
-              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs space-y-2">
-                <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-medium">
-                  <Building className="w-4 h-4 text-slate-500" />
-                  <span>Đơn vị hành chính: Tỉnh Thanh Hóa › Phường Hạc Thành</span>
-                </div>
-                {hacThanhAdmin && hacThanhAdmin.predecessors?.length > 0 && (
-                  <div className="text-slate-500 dark:text-slate-400 leading-relaxed text-[11px] pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
-                    <span className="font-semibold text-slate-600 dark:text-slate-300">
-                      Tên cũ / sáp nhập:{' '}
-                    </span>
-                    <span>
-                      Hợp nhất từ {hacThanhAdmin.predecessors.join(', ')} (theo Đề án sắp xếp ĐVHC có hiệu lực từ 01/07/2025).
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Legal Disclaimer */}
-              <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 rounded-xl border border-amber-200/60 dark:border-amber-900/60 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                <p className="leading-snug">{COPY.disclaimerVi}</p>
               </div>
 
               {/* Action Buttons: Share, Save, Report */}

@@ -26,6 +26,8 @@ export interface LandUseClass {
   source: CodeSource;
   /** True = meaning must be confirmed against the circular used for the map. */
   verify?: boolean;
+  /** One plain-language sentence for the result card. Only set where it has been written. */
+  plainVi?: string;
 }
 
 export type LegendGroupId =
@@ -42,8 +44,8 @@ export type LegendGroupId =
   | 'SKS_DRA'
   | 'NTD';
 
-const L = (code: string, nameVi: string, group: LegendGroupId | null): LandUseClass =>
-  ({ code, nameVi, group, source: 'legend' });
+const L = (code: string, nameVi: string, group: LegendGroupId | null, plainVi?: string): LandUseClass =>
+  ({ code, nameVi, group, source: 'legend', ...(plainVi ? { plainVi } : {}) });
 const M = (code: string, nameVi: string, group: LegendGroupId | null): LandUseClass =>
   ({ code, nameVi, group, source: 'map-only', verify: true });
 
@@ -51,8 +53,8 @@ export const LAND_USE_LIST: readonly LandUseClass[] = [
   // --- in the map legend ---
   L('LUA', 'Đất trồng lúa', 'LUC_LUA'),
   L('LUC', 'Đất chuyên trồng lúa nước', 'LUC_LUA'),
-  L('HNK', 'Đất trồng cây hằng năm khác', 'HNK'),
-  L('CLN', 'Đất trồng cây lâu năm', 'CLN'),
+  L('HNK', 'Đất trồng cây hằng năm khác', 'HNK', 'Đất trồng cây hằng năm, không phải lúa.'),
+  L('CLN', 'Đất trồng cây lâu năm', 'CLN', 'Đất trồng cây lâu năm như cây ăn quả, cây công nghiệp.'),
   L('NTS', 'Đất nuôi trồng thủy sản', 'AQUA_NTS_MNC'),
   L('RPH', 'Đất rừng phòng hộ', 'RPH'),
   L('RDD', 'Đất rừng đặc dụng', 'RDD'),
@@ -68,11 +70,11 @@ export const LAND_USE_LIST: readonly LandUseClass[] = [
   L('DDT', 'Đất di tích danh thắng', 'SALMON'),
   L('DDL', 'Đất danh lam thắng cảnh', 'SALMON'),
   L('DRA', 'Đất bãi thải, xử lý chất thải', 'SKS_DRA'),
-  L('ODT', 'Đất ở tại đô thị', 'ODT'),
+  L('ODT', 'Đất ở tại đô thị', 'ODT', 'Đất dành để xây nhà ở trong khu vực đô thị.'),
   L('TSC', 'Đất trụ sở cơ quan', 'SALMON'),
   L('DTS', 'Đất công trình sự nghiệp', 'SALMON'),
   L('TON', 'Đất cơ sở tôn giáo', 'SALMON'),
-  L('NTD', 'Đất nghĩa trang, nghĩa địa', 'NTD'),
+  L('NTD', 'Đất nghĩa trang, nghĩa địa', 'NTD', 'Đất dùng làm nghĩa trang, nghĩa địa.'),
   L('PNK', 'Đất phi nông nghiệp còn lại', 'SALMON'),
   L('DYT', 'Đất cơ sở y tế', 'SALMON'),
   L('DGD', 'Đất cơ sở giáo dục và đào tạo', 'SALMON'),
@@ -310,6 +312,10 @@ export const COPY = {
   lastUpdatedVi: 'Cập nhật lần cuối',
   effectiveFromVi: 'Có hiệu lực từ',
   unknownVi: 'Chưa có',
+  verifyTitleVi: 'Cách xác minh',
+  verifyHowVi: 'Mang theo vị trí đã chia sẻ và liên hệ UBND Phường Hạc Thành hoặc cơ quan quản lý quy hoạch của tỉnh Thanh Hóa để xác minh.',
+  adminPathVi: 'Tỉnh Thanh Hóa › Phường Hạc Thành',
+  oldNamesVi: 'Tên cũ',
 } as const;
 
 /** Paste into the Gemini response schema as the `enum` for category_code (offline use). */
