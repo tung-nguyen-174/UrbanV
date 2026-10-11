@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibreglWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
@@ -344,11 +345,16 @@ export const MapView: React.FC<MapViewProps> = ({
     mapRef.current?.zoomOut();
   };
 
-  // "My Location" handler (strictly user-triggered, never sent anywhere)
+  // "My Location": requested only when the button is pressed. The position is used once
+  // for the lookup and is not kept in state, storage or any request.
+  const showGeoError = (msg: string) => {
+    setGeoError(msg);
+    setTimeout(() => setGeoError(null), 6000);
+  };
+
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
-      setGeoError('Trình duyệt không hỗ trợ định vị.');
-      setTimeout(() => setGeoError(null), 3000);
+      showGeoError('Trình duyệt này không hỗ trợ định vị.');
       return;
     }
 
@@ -359,19 +365,24 @@ export const MapView: React.FC<MapViewProps> = ({
       (pos) => {
         setIsLocating(false);
         const { longitude, latitude } = pos.coords;
-        const map = mapRef.current;
-        if (map) {
-          map.flyTo({ center: [longitude, latitude], zoom: 16 });
-        }
+        mapRef.current?.flyTo({ center: [longitude, latitude], zoom: 16 });
+        // Outside the ward, the lookup answers with COPY.outOfPilotVi in the result sheet
         onSelectLocation(longitude, latitude);
       },
       (err) => {
         setIsLocating(false);
-        console.warn('Geolocation error:', err);
-        setGeoError('Không thể lấy vị trí hiện tại.');
-        setTimeout(() => setGeoError(null), 3000);
+        // GeolocationPositionError codes: 1 = denied, 2 = unavailable, 3 = timeout
+        if (err.code === err.PERMISSION_DENIED) {
+          showGeoError('Bạn chưa cho phép truy cập vị trí. Hãy bật quyền vị trí cho trang này trong cài đặt trình duyệt.');
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          showGeoError('Không xác định được vị trí hiện tại. Thử lại ở nơi có tín hiệu tốt hơn.');
+        } else if (err.code === err.TIMEOUT) {
+          showGeoError('Lấy vị trí mất quá lâu. Vui lòng thử lại.');
+        } else {
+          showGeoError('Không thể lấy vị trí hiện tại.');
+        }
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
   };
 
@@ -381,14 +392,14 @@ export const MapView: React.FC<MapViewProps> = ({
       <div ref={mapContainerRef} className="w-full h-full" />
 
       {/* Floating Map Controls (Right Side) */}
-      <div className="absolute top-20 right-3 z-20 flex flex-col gap-2">
+      <nav aria-label="Điều khiển bản đồ" className="absolute top-20 right-3 z-20 flex flex-col gap-2">
         {/* Zoom Controls */}
         <div className="flex flex-col bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 overflow-hidden">
           <button
             type="button"
             onClick={handleZoomIn}
             aria-label="Phóng to"
-            className="w-11 h-11 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 border-b border-slate-100 dark:border-white/10 transition-colors cursor-pointer"
+            className="w-12 h-12 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 border-b border-slate-100 dark:border-white/10 transition-colors cursor-pointer"
           >
             <Plus className="w-5 h-5" />
           </button>
@@ -396,7 +407,7 @@ export const MapView: React.FC<MapViewProps> = ({
             type="button"
             onClick={handleZoomOut}
             aria-label="Thu nhỏ"
-            className="w-11 h-11 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            className="w-12 h-12 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
           >
             <Minus className="w-5 h-5" />
           </button>
@@ -408,7 +419,7 @@ export const MapView: React.FC<MapViewProps> = ({
           onClick={handleLocateMe}
           disabled={isLocating}
           aria-label="Vị trí của tôi"
-          className="w-11 h-11 flex items-center justify-center bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50"
+          className="w-12 h-12 flex items-center justify-center bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50"
         >
           <Locate
             className={`w-5 h-5 ${isLocating ? 'animate-spin text-teal-500' : ''}`}
@@ -420,16 +431,17 @@ export const MapView: React.FC<MapViewProps> = ({
           type="button"
           onClick={onToggleTheme}
           aria-label="Chế độ tối"
-          className="h-11 px-3 flex items-center justify-center gap-1.5 bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+          aria-pressed={isDarkTheme}
+          className="h-12 px-3 flex items-center justify-center gap-1.5 bg-white/95 dark:bg-[#0B101D]/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/80 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
         >
           {isDarkTheme ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           <span className="text-sm font-medium whitespace-nowrap">Chế độ tối</span>
         </button>
-      </div>
+      </nav>
 
       {/* Geolocation feedback notification */}
       {geoError && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 bg-rose-900/90 text-white text-xs rounded-full shadow-lg backdrop-blur-xs">
+        <div role="status" className="absolute top-24 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 bg-rose-900/90 text-white text-sm rounded-full shadow-lg backdrop-blur-xs">
           {geoError}
         </div>
       )}

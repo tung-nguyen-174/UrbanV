@@ -47,3 +47,20 @@ html, body, #root {
 .dark .maplibregl-ctrl-attrib a {
   color: #cbd5e1 !important;
 }
+
+/* Base text size (SPEC 7): 16px. The A+ toggle scales the app root by 125%. */
+html {
+  font-size: 16px;
+}
+
+/* Respect "reduce motion": cut transitions and looping animations to (almost) nothing. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

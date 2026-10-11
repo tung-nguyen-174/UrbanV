@@ -26,23 +26,31 @@ export function isPreviewMode(): boolean {
 /**
  * Safely fetches a JSON or GeoJSON resource with fallback.
  */
-export async function safeFetchJson<T>(url: string, fallback: T): Promise<T> {
+export async function safeFetchJson<T>(
+  url: string,
+  fallback: T,
+  onError?: (url: string) => void
+): Promise<T> {
   try {
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!res.ok) {
       console.warn(`[UrbanV Data] Fetch ${url} returned ${res.status}`);
+      onError?.(url);
       return fallback;
     }
     const data = await res.json();
     return data as T;
   } catch (err) {
     console.warn(`[UrbanV Data] Failed to fetch ${url}:`, err);
+    onError?.(url);
     return fallback;
   }
 }
 
 /**
  * Loads all initial datasets.
+ * `loadErrors` lists the files that failed to load or had the wrong shape; the
+ * lookup must not run while it is non-empty (it would answer from empty data).
  */
 export async function loadAppDatasets(): Promise<{
   ward: FeatureCollection<Geometry, { [key: string]: unknown }>;
@@ -50,19 +58,30 @@ export async function loadAppDatasets(): Promise<{
   documents: DocumentRecord[];
   adminUnits: AdminUnit[];
   wardLoadError: boolean;
+  loadErrors: string[];
 }> {
+  const loadErrors: string[] = [];
+  const onError = (url: string) => loadErrors.push(url.split('/').pop() ?? url);
   const [wardData, featuresData, documentsData, adminUnitsData] = await Promise.all([
     safeFetchJson<FeatureCollection<Geometry, { [key: string]: unknown }>>(
       '/data/ward_boundary.geojson',
-      EMPTY_FEATURE_COLLECTION
+      EMPTY_FEATURE_COLLECTION,
+      onError
     ),
     safeFetchJson<PlanningFeatureCollection>(
       '/data/features.geojson',
-      EMPTY_FEATURE_COLLECTION as unknown as PlanningFeatureCollection
+      EMPTY_FEATURE_COLLECTION as unknown as PlanningFeatureCollection,
+      onError
     ),
-    safeFetchJson<DocumentRecord[]>('/data/documents.json', []),
+    safeFetchJson<DocumentRecord[]>('/data/documents.json', [], onError),
     safeFetchJson<AdminUnit[]>('/data/admin_units.json', []),
   ]);
+  if (!Array.isArray(featuresData?.features) && !loadErrors.includes('features.geojson')) {
+    loadErrors.push('features.geojson');
+  }
+  if (!Array.isArray(documentsData) && !loadErrors.includes('documents.json')) {
+    loadErrors.push('documents.json');
+  }
 
   // Determine if ward has valid polygon features
   let wardLoadError = false;
@@ -75,14 +94,18 @@ export async function loadAppDatasets(): Promise<{
     )
   ) {
     wardLoadError = true;
+    if (!loadErrors.includes('ward_boundary.geojson')) loadErrors.push('ward_boundary.geojson');
   }
 
   return {
     ward: wardData || EMPTY_FEATURE_COLLECTION,
-    features: featuresData || (EMPTY_FEATURE_COLLECTION as unknown as PlanningFeatureCollection),
-    documents: documentsData || [],
+    features: Array.isArray(featuresData?.features)
+      ? featuresData
+      : (EMPTY_FEATURE_COLLECTION as unknown as PlanningFeatureCollection),
+    documents: Array.isArray(documentsData) ? documentsData : [],
     adminUnits: adminUnitsData || [],
     wardLoadError,
+    loadErrors,
   };
 }
 
