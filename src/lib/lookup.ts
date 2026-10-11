@@ -5,14 +5,26 @@ import {
   COPY,
   isPublishable,
   isStale,
+  maxStatusFor,
+  STATUS,
+  THRESHOLDS,
   type ResultStatus,
 } from '../taxonomy';
 import type {
+  DocumentRecord,
   LookupOptions,
   LookupResult,
   PlanningFeature,
   PlanningFeatureCollection,
 } from '../types';
+
+export interface LookupWithDocumentsOptions extends LookupOptions {
+  /**
+   * Entries of documents.json. A match whose document is missing here counts as
+   * unverified, so it can never produce 'fit' (SPEC rule 12).
+   */
+  documents?: DocumentRecord[];
+}
 
 /**
  * Checks whether a point is contained within a polygon or multipolygon.
@@ -90,27 +102,34 @@ function isPointInWard(
 }
 
 /**
- * Pure planning lookup function.
- * Evaluates whether a coordinate (lng, lat) falls within the ward boundary and
- * planning zones according to Thông tư 08/2024/TT-BTNMT and UrbanV rules.
+ * Pure planning lookup function (SPEC sections 2 and 4).
+ *
+ * Order:
+ *  1. Outside the ward polygon             -> nodata, scope 'outside'
+ *  2. Publishable features containing the point (all of them)
+ *  3. No match                             -> nodata
+ *  4. maxStatusFor() per match, with its document from documents.json
+ *  5. uncertain (near boundary | stale | any match capped at 'uncertain')
+ *     > caution (transport + landuse overlap) > fit.
+ *     `transitional` adds a note only.
  *
  * @param lng Longitude (EPSG:4326)
  * @param lat Latitude (EPSG:4326)
  * @param ward Ward boundary Feature, FeatureCollection, or null
- * @param features FeatureCollection containing land-use & transport zones
- * @param opts Lookup options (previewMode, custom now date for testability)
- * @returns LookupResult with status, matches, boundary distance, and reasons
+ * @param features Planning features (filtered again here with isPublishable)
+ * @param opts previewMode, documents, custom `now` for tests
  */
 export function lookup(
   lng: number,
   lat: number,
   ward: FeatureCollection<Geometry> | Feature<Geometry> | Geometry | null | undefined,
   features: PlanningFeatureCollection | PlanningFeature[] | null | undefined,
-  opts: LookupOptions = {}
+  opts: LookupWithDocumentsOptions = {}
 ): LookupResult {
   const pt = turf.point([lng, lat]);
   const now = opts.now ?? new Date();
   const previewMode = Boolean(opts.previewMode);
+  const documents = opts.documents ?? [];
   const wardName = 'Phường Hạc Thành, Tỉnh Thanh Hóa';
 
   // 1. Ward containment check
@@ -142,22 +161,15 @@ export function lookup(
     };
   }
 
-  // 2. Filter publishable features
+  // 2. All publishable features that contain the point
   const allFeatures: PlanningFeature[] = Array.isArray(features)
     ? features
     : features?.features ?? [];
+  const matches = allFeatures.filter(
+    (f) => isPublishable(f.properties, previewMode) && isPointInside(pt, f)
+  );
 
-  const candidateFeatures = allFeatures.filter((f) => isPublishable(f.properties, previewMode));
-
-  // 3. Find matching features that contain the point
-  const matches: PlanningFeature[] = [];
-  for (const feat of candidateFeatures) {
-    if (isPointInside(pt, feat)) {
-      matches.push(feat);
-    }
-  }
-
-  // 4. If no matches inside the ward
+  // 3. No match inside the ward
   if (matches.length === 0) {
     return {
       status: 'nodata',
@@ -172,97 +184,53 @@ export function lookup(
     };
   }
 
-  // 5. Compute distance in metres to each match's boundary outline
+  // 4-5. Evaluate every match. A Set keeps each reason line once.
+  const reasons = new Set<string>();
+  let isUncertain = false;
   let nearestBoundaryM: number | null = null;
-  const boundaryDistances: (number | null)[] = [];
 
   for (const match of matches) {
+    const props = match.properties;
+    const doc = documents.find((d) => d.id === props.document_id) ?? null;
+
+    const cap = maxStatusFor(props, doc);
+    if (cap.max === 'uncertain') isUncertain = true;
+    cap.reasons.forEach((r) => reasons.add(r));
+
     const dist = distanceToBoundaryM(pt, match);
-    boundaryDistances.push(dist);
     if (dist !== null) {
-      if (nearestBoundaryM === null || dist < nearestBoundaryM) {
-        nearestBoundaryM = dist;
+      if (nearestBoundaryM === null || dist < nearestBoundaryM) nearestBoundaryM = dist;
+      const threshold = boundaryThresholdM(props.accuracy_m);
+      if (dist < threshold) {
+        isUncertain = true;
+        reasons.add(`Gần ranh giới (${dist} m, ngưỡng ${threshold} m)`);
       }
     }
-  }
 
-  // 6. Determine status priority and reasons
-  const reasons: string[] = [];
-  let isUncertain = false;
-  let isCaution = false;
-
-  if (nearestBoundaryM !== null) {
-    reasons.push(`Cách ranh giới quy hoạch gần nhất ${nearestBoundaryM} m`);
-  }
-
-  // Check each match for uncertainty criteria
-  for (let i = 0; i < matches.length; i++) {
-    const match = matches[i];
-    const props = match.properties;
-    const dist = boundaryDistances[i];
-    const threshold = boundaryThresholdM(props.accuracy_m);
-
-    // Rule: near boundary
-    if (dist !== null && dist < threshold) {
+    if (isStale(props.last_checked, now)) {
       isUncertain = true;
-      reasons.push(
-        `Vị trí cách ranh giới ${dist} m, nhỏ hơn ngưỡng không chắc chắn (${threshold} m)`
+      reasons.add(
+        props.last_checked
+          ? `Dữ liệu cập nhật lần cuối ${props.last_checked}, quá ${THRESHOLDS.STALE_MONTHS} tháng`
+          : 'Chưa rõ ngày cập nhật dữ liệu'
       );
     }
 
-    // Rule: stale data (>12 months)
-    if (isStale(props.last_checked, now)) {
-      isUncertain = true;
-      const lastStr = props.last_checked ? props.last_checked : 'chưa xác định';
-      reasons.push(`Dữ liệu cập nhật lần cuối ${lastStr} (quá 12 tháng)`);
-    } else if (props.last_checked) {
-      reasons.push(`Dữ liệu cập nhật gần nhất: ${props.last_checked}`);
-    }
-
-    // Rule: unapproved feature in preview mode
-    if (props.review_status !== 'approved') {
-      isUncertain = true;
-      const st =
-        props.review_status === 'draft' ? 'Bản nháp' : 'Đang duyệt';
-      reasons.push(`Chỉ là dữ liệu ${st}, chưa được phê duyệt chính thức`);
-    }
-
-    // Rule: transitional plan
-    if (props.transitional) {
-      isCaution = true;
-      reasons.push(COPY.transitionalVi);
-    }
+    // transitional adds a note; it does not lower the status
+    if (props.transitional) reasons.add(COPY.transitionalVi);
   }
 
-  // Rule: transport corridor overlapping landuse
   const hasTransport = matches.some((m) => m.properties.layer === 'transport');
   const hasLanduse = matches.some((m) => m.properties.layer === 'landuse');
-  if (hasTransport && hasLanduse) {
-    isCaution = true;
-    reasons.push('Vị trí đồng thời giao cắt giữa đất quy hoạch và tuyến giao thông');
-  }
+  const isCaution = hasTransport && hasLanduse;
+  if (isCaution) reasons.add('Có tuyến giao thông chồng lên vị trí này');
 
-  let status: ResultStatus = 'fit';
-  if (isUncertain) {
-    status = 'uncertain';
-  } else if (isCaution) {
-    status = 'caution';
-  } else {
-    status = 'fit';
-  }
+  const status: ResultStatus = isUncertain ? 'uncertain' : isCaution ? 'caution' : 'fit';
 
-  // Provide plain Vietnamese summary sentence
-  let message = '';
-  if (status === 'fit') {
-    message = 'Vị trí này nằm trong vùng quy hoạch theo dữ liệu đã được duyệt.';
-  } else if (status === 'caution') {
-    message =
-      'Có yếu tố quy hoạch chuyển tiếp hoặc hành lang giao thông cần lưu ý.';
-  } else if (status === 'uncertain') {
-    message =
-      'Vị trí gần ranh giới hoặc dữ liệu cần xác minh thêm với cơ quan có thẩm quyền.';
-  } else {
-    message = COPY.noPlanInWardVi;
+  // 6. Distance to the nearest boundary always comes first
+  const reasonLines = [...reasons];
+  if (nearestBoundaryM !== null) {
+    reasonLines.unshift(`Cách ranh giới gần nhất ${nearestBoundaryM} m`);
   }
 
   return {
@@ -270,8 +238,8 @@ export function lookup(
     scope: 'inside',
     matches,
     nearestBoundaryM,
-    reasons,
-    message,
+    reasons: reasonLines,
+    message: STATUS[status].sentenceVi,
     lng,
     lat,
     wardName,
@@ -280,67 +248,49 @@ export function lookup(
 
 /*
  ==============================================================================
- UNIT-TEST EXAMPLES IN PLAIN COMMENTS (6 SCENARIOS)
+ UNIT-TEST EXAMPLES (6 SCENARIOS). Vitest is not in this project, so these are
+ written as comments. Shared fixtures:
+
+ const ward = { type: "Feature", properties: {}, geometry: { type: "Polygon",
+   coordinates: [[[105.70, 19.80], [105.80, 19.80], [105.80, 19.90], [105.70, 19.90], [105.70, 19.80]]] } };
+ const square = { type: "Polygon",
+   coordinates: [[[105.74, 19.84], [105.76, 19.84], [105.76, 19.86], [105.74, 19.86], [105.74, 19.84]]] };
+ const docs = [
+   { id: "doc-ok", number: "123/QĐ-UBND", effective_date: "2024-01-01", authority: "UBND tỉnh", ... },
+ ];
+ const now = new Date("2026-10-11");
+ const props = { layer: "landuse", document_id: "doc-ok", last_checked: "2026-09-01", accuracy_m: 5 };
+ const odt = (review_status) => ({ type: "Feature", geometry: square,
+   properties: { ...props, id: "odt", category_code: "ODT", legend_group: "ODT", review_status } });
  ==============================================================================
 
- Scenario 1: Point outside ward boundary
- ---------------------------------------
- const wardPolygon = {
-   type: "Feature",
-   geometry: { type: "Polygon", coordinates: [[[105.7, 19.8], [105.8, 19.8], [105.8, 19.9], [105.7, 19.9], [105.7, 19.8]]] },
-   properties: {}
- };
- const res1 = lookup(106.0, 20.0, wardPolygon, []);
- // res1.status === "nodata"
- // res1.scope === "outside"
- // res1.message === COPY.outOfPilotVi ("Ngoài phạm vi thí điểm...")
+ 1. Outside ward
+    lookup(106.0, 20.0, ward, [odt("approved")], { documents: docs, now })
+    -> status "nodata", scope "outside", message === COPY.outOfPilotVi
 
- Scenario 2: Point inside ward boundary, but no planning polygon
- ---------------------------------------------------------------
- const res2 = lookup(105.75, 19.85, wardPolygon, []);
- // res2.status === "nodata"
- // res2.scope === "inside"
- // res2.message === COPY.noPlanInWardVi ("Vị trí nằm trong Phường Hạc Thành nhưng chưa có dữ liệu...")
+ 2. Inside ward, no match
+    lookup(105.72, 19.82, ward, [odt("approved")], { documents: docs, now })
+    -> status "nodata", scope "inside", message === COPY.noPlanInWardVi
 
- Scenario 3: Point inside approved ODT polygon, well clear of boundary (60m > 30m), fresh data
- --------------------------------------------------------------------------------------------
- const odtFeature = {
-   type: "Feature",
-   geometry: { type: "Polygon", coordinates: [[[105.74, 19.84], [105.76, 19.84], [105.76, 19.86], [105.74, 19.86], [105.74, 19.84]]] },
-   properties: { id: "odt-1", layer: "landuse", category_code: "ODT", review_status: "approved", last_checked: "2026-08-01", accuracy_m: 5 }
- };
- const res3 = lookup(105.75, 19.85, wardPolygon, [odtFeature]);
- // res3.status === "fit"
- // res3.matches.length === 1
- // res3.nearestBoundaryM > 30
+ 3. Draft ODT
+    lookup(105.75, 19.85, ward, [odt("draft")], { documents: docs, now })
+    -> "nodata" (drafts are hidden outside preview mode)
+    lookup(105.75, 19.85, ward, [odt("draft")], { documents: docs, now, previewMode: true })
+    -> "uncertain", reasons include COPY.notApprovedVi
 
- Scenario 4: Point inside approved ODT polygon, but within 15m of boundary (threshold 30m)
- -----------------------------------------------------------------------------------------
- const res4 = lookup(105.7401, 19.85, wardPolygon, [odtFeature]);
- // res4.nearestBoundaryM === 11 (which is < 30m)
- // res4.status === "uncertain"
- // res4.reasons includes boundary distance note
+ 4. Approved ODT, verified document, centre of the square, fresh data
+    lookup(105.75, 19.85, ward, [odt("approved")], { documents: docs, now })
+    -> "fit", reasons[0] starts with "Cách ranh giới gần nhất"
 
- Scenario 5: Point inside approved ODT polygon, far from boundary, but stale (>12 months)
- ----------------------------------------------------------------------------------------
- const staleFeature = {
-   ...odtFeature,
-   properties: { ...odtFeature.properties, last_checked: "2024-01-01" }
- };
- const res5 = lookup(105.75, 19.85, wardPolygon, [staleFeature], { now: new Date("2026-10-08") });
- // res5.status === "uncertain"
- // res5.reasons includes "quá 12 tháng"
+ 5. Salmon colour group, unresolved code
+    salmon = { ...odt("approved"), properties: { ...props, id: "s1", category_code: null,
+      legend_group: "SALMON", candidate_codes: ["TMD", "DHT", "DKV"], review_status: "approved" } }
+    lookup(105.75, 19.85, ward, [salmon], { documents: docs, now })
+    -> "uncertain", reasons include COPY.unresolvedReasonVi;
+       featureTitleVi(salmon.properties) === "Đất phi nông nghiệp khác, chưa phân loại chi tiết"
 
- Scenario 6: Point inside approved ODT polygon overlapping a DGT transport corridor
- -----------------------------------------------------------------------------------
- const dgtFeature = {
-   type: "Feature",
-   geometry: { type: "Polygon", coordinates: [[[105.74, 19.84], [105.76, 19.84], [105.76, 19.86], [105.74, 19.86], [105.74, 19.84]]] },
-   properties: { id: "dgt-1", layer: "transport", category_code: "DGT", review_status: "approved", last_checked: "2026-08-01" }
- };
- const res6 = lookup(105.75, 19.85, wardPolygon, [odtFeature, dgtFeature]);
- // res6.status === "caution"
- // res6.matches.length === 2
- // res6.reasons includes cross-zone transport overlap warning
+ 6. Approved verified ODT, about 10 m inside the west edge (threshold 30 m)
+    lookup(105.7401, 19.85, ward, [odt("approved")], { documents: docs, now })
+    -> "uncertain", nearestBoundaryM < 30, reasons include "Gần ranh giới (…)"
  ==============================================================================
 */

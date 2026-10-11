@@ -19,14 +19,43 @@ import {
   STATUS,
   COPY,
   featureTitleVi,
+  getGroup,
+  isDocumentVerified,
 } from '../taxonomy';
 import type {
   AdminUnit,
   DocumentRecord,
   LookupResult,
   PlanningFeature,
+  PlanningFeatureProperties,
 } from '../types';
 import { computeAreaHa, savePlaceLocally } from '../lib/data';
+
+/** Colour swatch + glyph of the feature's legend group (colour is never the only signal). */
+const GroupSwatch: React.FC<{ legendGroup?: string | null }> = ({ legendGroup }) => {
+  const group = getGroup(legendGroup);
+  if (!group) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className="w-5 h-5 rounded-md shrink-0 inline-flex items-center justify-center text-[11px] leading-none text-black"
+      style={{ backgroundColor: group.color, border: `1.5px solid ${group.outline}` }}
+    >
+      {group.glyph}
+    </span>
+  );
+};
+
+/** Title line for one match: swatch + featureTitleVi. */
+const MatchTitle: React.FC<{ props: PlanningFeatureProperties; className?: string }> = ({
+  props,
+  className,
+}) => (
+  <span className={`flex items-center gap-2 ${className ?? ''}`}>
+    <GroupSwatch legendGroup={props.legend_group} />
+    <span>{featureTitleVi(props)}</span>
+  </span>
+);
 
 interface ResultSheetProps {
   result: LookupResult | null;
@@ -156,7 +185,13 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
               </h2>
               <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
                 {primaryMatch ? (
-                  <span className="truncate">{featureTitleVi(primaryMatch.properties)}</span>
+                  <>
+                    <GroupSwatch legendGroup={primaryMatch.properties.legend_group} />
+                    <span className="truncate">{featureTitleVi(primaryMatch.properties)}</span>
+                    {result.matches.length > 1 && (
+                      <span className="shrink-0">+{result.matches.length - 1}</span>
+                    )}
+                  </>
                 ) : (
                   <span>{result.wardName}</span>
                 )}
@@ -235,9 +270,13 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
             <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 space-y-3">
               <div className="space-y-1">
                 <span className="text-sm text-slate-400">Phân loại đất</span>
-                <p className="text-base font-semibold text-slate-900 dark:text-white">
-                  {featureTitleVi(primaryMatch.properties)}
-                </p>
+                {result.matches.map((m, idx) => (
+                  <MatchTitle
+                    key={m.properties.id || idx}
+                    props={m.properties}
+                    className="text-base font-semibold text-slate-900 dark:text-white"
+                  />
+                ))}
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-sm">
@@ -247,7 +286,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                     {COPY.effectiveFromVi}
                   </span>
                   <span className="font-medium text-slate-800 dark:text-slate-200">
-                    {primaryMatch.properties.effective_date || 'Chưa có'}
+                    {primaryMatch.properties.effective_date || COPY.unknownVi}
                   </span>
                 </div>
                 <div>
@@ -256,7 +295,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                     {COPY.lastUpdatedVi}
                   </span>
                   <span className="font-medium text-slate-800 dark:text-slate-200">
-                    {primaryMatch.properties.last_checked || 'Chưa có'}
+                    {primaryMatch.properties.last_checked || COPY.unknownVi}
                   </span>
                 </div>
               </div>
@@ -321,8 +360,16 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                               Mã đối tượng: {props.id}
                             </span>
                             <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
-                              {featureTitleVi(props)}
+                              <MatchTitle props={props} />
                             </h4>
+                            {props.category_code == null && (
+                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                Nhóm màu này gồm các mã:{' '}
+                                {props.candidate_codes?.length
+                                  ? props.candidate_codes.join(', ')
+                                  : COPY.unknownVi}
+                              </p>
+                            )}
                           </div>
                           {areaHa !== null && (
                             <div className="text-right shrink-0">
@@ -343,13 +390,21 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                                 {doc?.title || 'Chưa có thông tin tên văn bản'}
                               </span>
                               <div className="text-slate-500 dark:text-slate-400 space-y-0.5 text-[11px]">
-                                <div>Số hiệu: {doc?.number || 'Chưa có'}</div>
-                                <div>Cơ quan ban hành: {doc?.authority || 'Chưa có'}</div>
+                                <div>Số hiệu: {doc?.number || COPY.unknownVi}</div>
+                                <div>
+                                  {COPY.effectiveFromVi}: {doc?.effective_date || COPY.unknownVi}
+                                </div>
+                                <div>Cơ quan ban hành: {doc?.authority || COPY.unknownVi}</div>
                                 <div>
                                   Trang tài liệu căn cứ:{' '}
-                                  {props.source_page ? `Trang ${props.source_page}` : 'Chưa có'}
+                                  {props.source_page ? `Trang ${props.source_page}` : COPY.unknownVi}
                                 </div>
                               </div>
+                              {!isDocumentVerified(doc) && (
+                                <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-snug">
+                                  {COPY.mapSourceNoteVi}
+                                </p>
+                              )}
                             </div>
                           </div>
 
@@ -367,7 +422,7 @@ export const ResultSheet: React.FC<ResultSheetProps> = ({
                               </a>
                             ) : (
                               <span className="text-slate-400 italic text-[11px]">
-                                Chưa có liên kết chính thức
+                                {COPY.noOfficialLinkVi}
                               </span>
                             )}
                           </div>
