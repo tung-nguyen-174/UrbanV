@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { Suspense, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as turf from '@turf/turf';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { Bookmark, AlertTriangle, AlertCircle, X, Sparkles, MapPin, Trash2 } from 'lucide-react';
@@ -21,12 +21,16 @@ import {
   EMPTY_FEATURE_COLLECTION,
 } from './lib/data';
 import { lookup } from './lib/lookup';
-import { MapView } from './components/MapView';
 import { SearchBar } from './components/SearchBar';
 import { Legend } from './components/Legend';
 import { ResultSheet } from './components/ResultSheet';
 import { ReportDialog } from './components/ReportDialog';
 import { UrbanVLogo } from './components/UrbanVLogo';
+
+// maplibre-gl (about 1 MB) is loaded only when the map is shown, so the search and header paint first
+const MapView = React.lazy(() =>
+  import('./components/MapView').then((m) => ({ default: m.MapView }))
+);
 
 export default function App() {
   // Datasets
@@ -38,6 +42,19 @@ export default function App() {
   const [adminUnits, setAdminUnits] = useState<AdminUnit[]>([]);
   const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+  // Mount the map after the first paint, so the map chunk does not block the search and header
+  const [isMapMounted, setIsMapMounted] = useState<boolean>(false);
+  useEffect(() => {
+    let timer = 0;
+    const frame = requestAnimationFrame(() => {
+      timer = window.setTimeout(() => setIsMapMounted(true), 0);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, []);
+
   // Lookups run only when ward, features and documents have all loaded successfully
   const isDataReady = !isLoadingData && loadErrors.length === 0;
 
@@ -291,14 +308,24 @@ export default function App() {
         </aside>
 
         {/* Interactive MapView */}
-        <MapView
-          ward={ward}
-          features={visibleFeatures}
-          activeCoordinate={activeCoordinate}
-          onSelectLocation={handleMapSelect}
-          isDarkTheme={isDarkTheme}
-          onToggleTheme={toggleTheme}
-        />
+        <Suspense
+          fallback={
+            <div role="status" className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-[#0B101D] text-slate-700 dark:text-slate-300 text-sm">
+              Đang tải bản đồ…
+            </div>
+          }
+        >
+          {isMapMounted && (
+            <MapView
+              ward={ward}
+              features={visibleFeatures}
+              activeCoordinate={activeCoordinate}
+              onSelectLocation={handleMapSelect}
+              isDarkTheme={isDarkTheme}
+              onToggleTheme={toggleTheme}
+            />
+          )}
+        </Suspense>
       </main>
 
       {/* 5. RESULT SHEET (3 SNAP HEIGHTS: COLLAPSED, HALF, FULL) */}
