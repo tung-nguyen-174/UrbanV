@@ -12,6 +12,7 @@ import type {
 } from './types';
 import {
   loadAppDatasets,
+  safeFetchJson,
   filterVisibleFeatures,
   isPreviewMode,
   getLargeTextPref,
@@ -84,27 +85,29 @@ export default function App() {
     return filterVisibleFeatures(allFeatures, isDraftPreview);
   }, [allFeatures, isDraftPreview]);
 
-  // Legend: groups present in loaded features, each with its share of the ward's area.
-  // The ward area is the sum of its polygons; overlapping plan polygons are counted twice.
-  const wardAreaM2 = useMemo(() => {
-    let total = 0;
-    for (const f of ward.features ?? []) {
-      if (f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon') total += turf.area(f as any);
-    }
-    return total;
-  }, [ward]);
+  // Legend: groups present in loaded features. Each group's share of the ward comes from
+  // legend_shares.json, computed at build time from the geometry (clipping in the browser froze the page).
+  const [legendShares, setLegendShares] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    safeFetchJson<{ shares?: Record<string, number> }>('/data/legend_shares.json', {}).then((d) => {
+      if (alive) setLegendShares(d.shares ?? {});
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const legendItems = useMemo<LegendItem[]>(() => {
-    const areas = new Map<LegendGroupId, number>();
+    const present = new Set<LegendGroupId>();
     for (const f of visibleFeatures) {
       const group = getGroup(f.properties?.legend_group);
-      if (!group) continue;
-      areas.set(group.id, (areas.get(group.id) ?? 0) + turf.area(f as any));
+      if (group) present.add(group.id);
     }
-    return LEGEND_GROUP_IDS.filter((id) => areas.has(id)).map((id) => ({
+    return LEGEND_GROUP_IDS.filter((id) => present.has(id)).map((id) => ({
       id,
-      areaPct: wardAreaM2 > 0 ? ((areas.get(id) ?? 0) / wardAreaM2) * 100 : 0,
+      areaPct: legendShares && legendShares[id] !== undefined ? legendShares[id] * 100 : null,
     }));
-  }, [visibleFeatures, wardAreaM2]);
+  }, [visibleFeatures, legendShares]);
 
   // Legend controls. Every group is on by default; the user switches groups off.
   const [hiddenGroups, setHiddenGroups] = useState<LegendGroupId[]>([]);
